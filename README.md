@@ -10,7 +10,8 @@ when something happens. It does not replace the caregiver. It stands beside them
 > Major Project — NMAM Institute of Technology, Nitte
 > Department of Information Science & Engineering · 7th Semester · Team 36
 > Ibbani H G (NNM23IS077) · Chirag Rai (NNM23IS037)
-> Guide: Dr. Karuna Pandit
+> Guide: Dr. Naganna Chetty
+
 
 ---
 
