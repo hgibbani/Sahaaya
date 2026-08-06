@@ -1,0 +1,30 @@
+# Gradle
+.gradle/
+build/
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Firebase - each developer supplies their own file from the Firebase console.
+# See docs/FIREBASE.md and app/google-services.json.template
+google-services.json
+
+# Signing material - never commit
+*.jks
+*.keystore
+keystore.properties
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cloud Functions
+functions/node_modules/
+functions/package-lock.json
+firebase-debug.log
+.firebase/

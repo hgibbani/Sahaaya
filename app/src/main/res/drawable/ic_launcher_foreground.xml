@@ -1,0 +1,19 @@
+<!--
+  A shield enclosing a heart: protection around care. Drawn inside the 72dp
+  safe zone of the 108dp adaptive-icon canvas so no launcher mask clips it.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group android:translateX="30" android:translateY="30">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M24,2L6,10v14c0,11.1 7.68,21.48 18,24c10.32,-2.52 18,-12.9 18,-24V10L24,2zM24,39c-7.72,-2.4 -14,-11.02 -14,-19V12.6l14,-6.22l14,6.22V20C38,27.98 31.72,36.6 24,39z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M24,31.4l-1.44,-1.3C17.44,25.48 14,22.38 14,18.58c0,-3.1 2.44,-5.54 5.54,-5.54c1.76,0 3.44,0.82 4.46,2.1c1.02,-1.28 2.7,-2.1 4.46,-2.1c3.1,0 5.54,2.44 5.54,5.54c0,3.8 -3.44,6.9 -8.56,11.54L24,31.4z" />
+    </group>
+</vector>

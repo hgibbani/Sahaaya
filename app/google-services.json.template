@@ -1,0 +1,37 @@
+{
+  "_comment": [
+    "TEMPLATE ONLY - the app will not build against this file.",
+    "Create a Firebase project, add an Android app with the package name",
+    "com.sahaaya.app, download the real google-services.json, and save it as",
+    "app/google-services.json. That path is gitignored on purpose: the file",
+    "identifies your Firebase project and does not belong in a public repo.",
+    "Full walkthrough: docs/FIREBASE.md"
+  ],
+  "project_info": {
+    "project_number": "000000000000",
+    "project_id": "sahaaya-replace-me",
+    "storage_bucket": "sahaaya-replace-me.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "android_client_info": {
+          "package_name": "com.sahaaya.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "REPLACE_WITH_YOUR_ANDROID_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

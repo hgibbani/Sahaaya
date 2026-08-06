@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The platform theme only covers the window before Compose takes over. Every
+  colour the user actually sees comes from SahaayaTheme in :common. The bars are
+  transparent because the activity draws edge to edge.
+-->
+<resources>
+    <style name="Theme.Sahaaya" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

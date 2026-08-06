@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Declared here rather than in :app because the components that need them
+      live in this module. All three also require a runtime grant, which the
+      permission flow in :feature:monitoring walks the patient through.
+
+      ACCESS_BACKGROUND_LOCATION must be requested separately and only after
+      foreground location has been granted; Android silently denies it
+      otherwise. Without it geofencing does not fire when the app is closed -
+      which is the only situation a wandering patient is ever in.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
+    <!-- Fall detection must survive the screen going off. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Monitoring restarts itself after the phone is rebooted. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+      The accelerometer is required for fall detection, but the app is still
+      useful without it (pairing, profiles, SOS, reminders), so it is not a
+      hard install requirement.
+    -->
+    <uses-feature
+        android:name="android.hardware.sensor.accelerometer"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.location.gps"
+        android:required="false" />
+
+    <application>
+        <receiver
+            android:name=".geofence.GeofenceBroadcastReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".activity.ActivityTransitionReceiver"
+            android:exported="false" />
+    </application>
+</manifest>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      A dose at 9:00 means 9:00, so reminders use exact alarms. Android 12+ can
+      refuse this and 14+ does not grant it by default; the app degrades to
+      inexact alarms rather than failing, and tells the patient it has done so.
+    -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <application>
+        <receiver
+            android:name=".reminder.ReminderReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.sahaaya.medication.TAKEN" />
+                <action android:name="com.sahaaya.medication.SKIPPED" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

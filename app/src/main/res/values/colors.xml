@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches SurfaceLight in :common so there is no flash between the
+         window background and the first Compose frame. -->
+    <color name="window_background">#FCFDFC</color>
+    <color name="launcher_background">#0E7C7B</color>
+</resources>

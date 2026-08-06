@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sahaaya holds health information. None of it is eligible for cloud backup or
+  device-to-device transfer: the authoritative copy lives in Firestore behind
+  the user's own credentials, and a restored local copy would be an unguarded
+  second copy of a medical record.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="file" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="file" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

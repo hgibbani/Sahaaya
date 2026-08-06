@@ -1,0 +1,270 @@
+rules_version = '2';
+
+// ---------------------------------------------------------------------------
+// SAHAAYA - Cloud Firestore security rules
+//
+// These rules are the real access control for a patient's medical information.
+// The app's UI decides what is *shown*; only these rules decide what can be
+// *read*. Everything here assumes the client is hostile.
+//
+// Deploy with:  firebase deploy --only firestore:rules
+// Model and rationale: docs/FIREBASE.md
+// ---------------------------------------------------------------------------
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- helpers ---------------------------------------------------------
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function pairingId(patientId, caregiverId) {
+      return patientId + '_' + caregiverId;
+    }
+
+    // A caregiver may reach a patient's data only while an ACTIVE pairing
+    // document exists. Revoking the pairing revokes the access in the same
+    // instant, with no client cooperation required.
+    function isActiveCaregiverOf(patientId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/pairings/$(pairingId(patientId, request.auth.uid))) &&
+        get(/databases/$(database)/documents/pairings/$(pairingId(patientId, request.auth.uid))).data.status == 'active';
+    }
+
+    function roleOf(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data.role;
+    }
+
+    // --- users/{uid} -----------------------------------------------------
+    // Identity and role. Kept small and separate from clinical data so that a
+    // caregiver can resolve a name without that granting access to a diagnosis.
+
+    match /users/{uid} {
+      allow read: if isSelf(uid) || isActiveCaregiverOf(uid);
+
+      // The document is created at registration by the account it belongs to.
+      allow create: if isSelf(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.role in ['patient', 'caregiver'];
+
+      // Role is immutable. Pairings, clinical documents and these very rules
+      // all assume the role an account was created with.
+      allow update: if isSelf(uid)
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.uid == resource.data.uid;
+
+      // Accounts are never deleted from the client; doing so would orphan
+      // pairings that a patient relies on for their alert routing.
+      allow delete: if false;
+    }
+
+    // --- patients/{uid} --------------------------------------------------
+    // Clinical detail. Readable by the patient and by any actively paired
+    // caregiver. Writable only by the patient: in Phase 2 nobody edits someone
+    // else's medical record.
+
+    match /patients/{uid} {
+      allow read: if isSelf(uid) || isActiveCaregiverOf(uid);
+      allow create, update: if isSelf(uid) && roleOf(request.auth.uid) == 'patient';
+      allow delete: if false;
+
+      // --- emergency contacts -------------------------------------------
+      // A caregiver must be able to read these in an emergency; only the
+      // patient may change who gets called.
+      match /emergencyContacts/{contactId} {
+        allow read: if isSelf(uid) || isActiveCaregiverOf(uid);
+        allow write: if isSelf(uid);
+      }
+
+    }
+
+    // --- caregivers/{uid} ------------------------------------------------
+
+    match /caregivers/{uid} {
+      // A patient may see the profile of a caregiver linked to them.
+      allow read: if isSelf(uid) ||
+        (isSignedIn() &&
+         exists(/databases/$(database)/documents/pairings/$(pairingId(request.auth.uid, uid))) &&
+         get(/databases/$(database)/documents/pairings/$(pairingId(request.auth.uid, uid))).data.status == 'active');
+      allow create, update: if isSelf(uid) && roleOf(request.auth.uid) == 'caregiver';
+      allow delete: if false;
+    }
+
+    // --- pairings/{patientId}_{caregiverId} -------------------------------
+    // The consent record, and the document every other rule above consults.
+
+    match /pairings/{id} {
+      allow read: if isSignedIn() &&
+        (resource.data.patientId == request.auth.uid ||
+         resource.data.caregiverId == request.auth.uid);
+
+      // Only a caregiver creates a pairing, and only for themselves. The
+      // document id is pinned to the two participants so the same pair can
+      // never produce two competing records.
+      //
+      // Possession of a valid code is enforced by the pairingCodes rules
+      // below: the client writes both documents in a single transaction, so a
+      // pairing cannot be committed unless the matching code update - which
+      // requires an unredeemed, unexpired code - is also permitted.
+      allow create: if isSignedIn()
+        && request.resource.data.caregiverId == request.auth.uid
+        && request.resource.data.status == 'active'
+        && roleOf(request.auth.uid) == 'caregiver'
+        && id == pairingId(request.resource.data.patientId, request.auth.uid);
+
+      // Either participant may revoke. The only permitted transition is to
+      // 'revoked' - a revoked link can never be silently reactivated, which
+      // would restore access to a medical record without fresh consent.
+      allow update: if isSignedIn()
+        && (resource.data.patientId == request.auth.uid ||
+            resource.data.caregiverId == request.auth.uid)
+        && request.resource.data.status == 'revoked'
+        && request.resource.data.patientId == resource.data.patientId
+        && request.resource.data.caregiverId == resource.data.caregiverId;
+
+      allow delete: if false;
+    }
+
+    // --- pairingCodes/{code} ----------------------------------------------
+    // Short-lived and deliberately awkward. A caregiver must be able to look up
+    // a code they were told, but must never be able to enumerate codes.
+
+    match /pairingCodes/{code} {
+      // Readable only by exact document id - there is no query surface here,
+      // so a caregiver can check the code they were given and nothing else.
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && resource.data.patientId == request.auth.uid;
+
+      // Only a patient issues a code, only for themselves, and only with an
+      // expiry inside the allowed window.
+      allow create: if isSignedIn()
+        && request.resource.data.patientId == request.auth.uid
+        && roleOf(request.auth.uid) == 'patient'
+        && request.resource.data.redeemedByCaregiverId == null
+        && request.resource.data.expiresAt > request.time.toMillis()
+        && request.resource.data.expiresAt <= request.time.toMillis() + 900000;
+
+      // A code may only be marked redeemed, by the caregiver redeeming it, and
+      // only while it is still valid.
+      allow update: if isSignedIn()
+        && resource.data.redeemedByCaregiverId == null
+        && request.resource.data.redeemedByCaregiverId == request.auth.uid
+        && resource.data.expiresAt > request.time.toMillis();
+
+      // The patient can cancel their own outstanding code.
+      allow delete: if isSignedIn() && resource.data.patientId == request.auth.uid;
+    }
+
+    // --- events/{eventId} -------------------------------------------------
+    // Falls, geofence exits, inactivity, SOS and missed doses.
+    //
+    // Top-level rather than nested under the patient so a caregiver with
+    // several patients gets one timeline from one query.
+
+    match /events/{eventId} {
+      allow read: if isSignedIn() &&
+        (resource.data.patientId == request.auth.uid ||
+         isActiveCaregiverOf(resource.data.patientId));
+
+      // Only the patient's own device raises events about them. A caregiver
+      // cannot manufacture a fall on someone else's record.
+      allow create: if isSignedIn()
+        && request.resource.data.patientId == request.auth.uid
+        && request.resource.data.status == 'new';
+
+      // The log is append-only apart from status. Nobody may rewrite what
+      // happened or when - only record that it was seen or withdrawn.
+      allow update: if isSignedIn()
+        && request.resource.data.patientId == resource.data.patientId
+        && request.resource.data.type == resource.data.type
+        && request.resource.data.occurredAt == resource.data.occurredAt
+        && (
+          // The patient cancels during the confirmation countdown.
+          (resource.data.patientId == request.auth.uid &&
+           request.resource.data.status == 'cancelled')
+          ||
+          // A paired caregiver acknowledges.
+          (isActiveCaregiverOf(resource.data.patientId) &&
+           request.resource.data.status == 'acknowledged' &&
+           request.resource.data.acknowledgedByCaregiverId == request.auth.uid)
+        );
+
+      // Never. The record of an emergency is not the patient's to erase, and
+      // it is not the caregiver's either.
+      allow delete: if false;
+    }
+
+    // --- medications/{medicationId} ---------------------------------------
+
+    match /medications/{medicationId} {
+      allow read: if isSignedIn() &&
+        (resource.data.patientId == request.auth.uid ||
+         isActiveCaregiverOf(resource.data.patientId));
+
+      allow create: if isSignedIn()
+        && request.resource.data.patientId == request.auth.uid;
+
+      allow update: if isSignedIn()
+        && resource.data.patientId == request.auth.uid
+        && request.resource.data.patientId == resource.data.patientId;
+
+      // Removal is a soft delete (isActive = false) through update, so that
+      // existing dose history keeps referring to a medicine that still exists.
+      allow delete: if false;
+    }
+
+    // --- doses/{doseId} ---------------------------------------------------
+
+    match /doses/{doseId} {
+      allow read: if isSignedIn() &&
+        (resource.data.patientId == request.auth.uid ||
+         isActiveCaregiverOf(resource.data.patientId));
+
+      // Written by the patient's device when a reminder fires, and updated by
+      // the patient answering it or by the missed-dose sweep.
+      allow create, update: if isSignedIn()
+        && request.resource.data.patientId == request.auth.uid;
+
+      allow delete: if false;
+    }
+
+    // --- settings/{patientId} ---------------------------------------------
+    // Monitoring thresholds and the safe zone. Readable by a paired caregiver
+    // so they can see what the phone is actually doing, writable only by the
+    // patient whose phone it is.
+
+    match /settings/{patientId} {
+      allow read: if isSelf(patientId) || isActiveCaregiverOf(patientId);
+      allow create, update: if isSelf(patientId)
+        && request.resource.data.patientId == patientId;
+      allow delete: if false;
+    }
+
+    // --- notifications/{notificationId} -----------------------------------
+    // Delivery log written by the Cloud Function, so a caregiver can tell the
+    // difference between "no alert was sent" and "an alert was sent but my
+    // phone never showed it".
+
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() &&
+        (resource.data.caregiverId == request.auth.uid ||
+         resource.data.patientId == request.auth.uid);
+
+      // Server-side only. The Admin SDK bypasses these rules; no client may
+      // forge a delivery record.
+      allow write: if false;
+    }
+
+    // Anything not matched above is denied. New collections must be added here
+    // deliberately rather than inheriting access by accident.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

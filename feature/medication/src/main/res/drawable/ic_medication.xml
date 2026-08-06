@@ -1,0 +1,12 @@
+<!-- Reminder notification icon: a capsule, drawn flat because Android masks
+     status-bar icons to a single colour. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M17.5,3.5c-1.6,-1.6 -4.2,-1.6 -5.8,0l-8.2,8.2c-1.6,1.6 -1.6,4.2 0,5.8s4.2,1.6 5.8,0l8.2,-8.2C19.1,7.7 19.1,5.1 17.5,3.5zM8.1,16.1c-0.8,0.8 -2.1,0.8 -2.9,0s-0.8,-2.1 0,-2.9l3.6,-3.6l2.9,2.9L8.1,16.1z" />
+</vector>

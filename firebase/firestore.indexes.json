@@ -1,0 +1,57 @@
+{
+  "_comment": [
+    "Composite indexes Firestore cannot infer. Deploy with:",
+    "  firebase deploy --only firestore:indexes",
+    "Without these, the caregiver timeline and the missed-dose sweep fail at",
+    "runtime with FAILED_PRECONDITION rather than at build time."
+  ],
+  "indexes": [
+    {
+      "_comment": "Patient's own event history, newest first.",
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "occurredAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "Caregiver timeline across several patients (whereIn + orderBy).",
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "patientId", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "occurredAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "Active medicines for a patient.",
+      "collectionGroup": "medications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "isActive", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "_comment": "Recent dose history, newest first.",
+      "collectionGroup": "doses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "scheduledAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "Pending doses, and the overdue sweep that reads them.",
+      "collectionGroup": "doses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "scheduledAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

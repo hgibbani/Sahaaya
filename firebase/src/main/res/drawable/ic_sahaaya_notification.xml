@@ -1,0 +1,20 @@
+<!--
+  Status-bar icon. Android masks notification icons to a single colour, so this
+  is drawn as an opaque silhouette: a shield (protection) enclosing a heart
+  (care). Anything with internal shading would render as a solid blob.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,1L3,5v6c0,5.55 3.84,10.74 9,12c5.16,-1.26 9,-6.45 9,-12V5L12,1zM12,20.5c-3.86,-1.2 -7,-5.51 -7,-9.5V6.3l7,-3.11l7,3.11V11C19,14.99 15.86,19.3 12,20.5z" />
+
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,16.2l-0.72,-0.65C8.72,13.24 7,11.69 7,9.79c0,-1.55 1.22,-2.77 2.77,-2.77c0.88,0 1.72,0.41 2.23,1.05c0.51,-0.64 1.35,-1.05 2.23,-1.05C15.78,7.02 17,8.24 17,9.79c0,1.9 -1.72,3.45 -4.28,5.77L12,16.2z" />
+</vector>
