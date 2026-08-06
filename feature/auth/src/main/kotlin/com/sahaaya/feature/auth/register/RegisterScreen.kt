@@ -22,6 +22,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sahaaya.common.components.Banner
+import com.sahaaya.common.components.DemoModeBadge
 import com.sahaaya.common.components.PrimaryButton
 import com.sahaaya.common.components.SahaayaPasswordField
 import com.sahaaya.common.components.SahaayaScreen
@@ -82,6 +83,7 @@ private fun RegisterContent(
         },
         onNavigateBack = onNavigateBack,
         modifier = modifier,
+        actions = { DemoModeBadge() },
     ) {
         Text(
             text = when (role) {

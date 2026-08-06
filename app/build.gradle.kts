@@ -12,7 +12,11 @@ android {
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "com.sahaaya.app"
+        // Must match the package_name of a client registered in
+        // app/google-services.json, otherwise :app:processDebugGoogleServices
+        // fails the build. The Firebase console registers this app as
+        // com.sahaaya.elderlycare; the Kotlin namespace stays com.sahaaya.app.
+        applicationId = "com.sahaaya.elderlycare"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1

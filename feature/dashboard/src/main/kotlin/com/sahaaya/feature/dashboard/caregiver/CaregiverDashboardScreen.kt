@@ -32,6 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sahaaya.common.components.ActionCard
 import com.sahaaya.common.components.Banner
 import com.sahaaya.common.components.BannerTone
+import com.sahaaya.common.components.DemoModeBadge
 import com.sahaaya.common.components.EmptyState
 import com.sahaaya.common.components.LoadingState
 import com.sahaaya.common.components.SahaayaCard
@@ -94,6 +95,7 @@ private fun CaregiverDashboardContent(
         title = state.user?.firstName?.let { "Hello, $it" } ?: "Sahaaya",
         modifier = modifier,
         actions = {
+            DemoModeBadge()
             IconButton(onClick = onSignOut) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Logout,

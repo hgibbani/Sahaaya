@@ -27,6 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sahaaya.common.components.ActionCard
 import com.sahaaya.common.components.Banner
 import com.sahaaya.common.components.BannerTone
+import com.sahaaya.common.components.DemoModeBadge
 import com.sahaaya.common.components.LoadingState
 import com.sahaaya.common.components.SahaayaCard
 import com.sahaaya.common.components.SahaayaScreen
@@ -97,6 +98,7 @@ private fun PatientDashboardContent(
         title = state.user?.firstName?.let { "Hello, $it" } ?: "Sahaaya",
         modifier = modifier,
         actions = {
+            DemoModeBadge()
             IconButton(onClick = onOpenSettings) {
                 Icon(Icons.Filled.Tune, contentDescription = "Monitoring settings")
             }

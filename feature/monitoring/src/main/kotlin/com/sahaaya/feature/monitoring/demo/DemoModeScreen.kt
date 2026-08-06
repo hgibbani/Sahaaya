@@ -20,9 +20,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sahaaya.common.components.ActionCard
 import com.sahaaya.common.components.Banner
 import com.sahaaya.common.components.BannerTone
+import com.sahaaya.common.components.DemoModeBadge
 import com.sahaaya.common.components.SahaayaScreen
 import com.sahaaya.common.theme.Dimens
 import com.sahaaya.common.theme.SahaayaTheme
+import com.sahaaya.core.demo.DemoConfig
 import com.sahaaya.domain.model.EventType
 
 @Composable
@@ -69,11 +71,19 @@ private fun DemoModeContent(
         title = "Developer mode",
         onNavigateBack = onNavigateBack,
         modifier = modifier,
+        actions = { DemoModeBadge() },
     ) {
         Banner(
-            message = "Debug builds only. Each button runs the real detection " +
-                "pipeline - the same Firestore write, security rules and caregiver " +
-                "notification. Only the physical action is skipped.",
+            message = if (DemoConfig.ENABLED) {
+                "Debug builds only. Each button runs the real detection pipeline - " +
+                    "the same use cases, the same event record, the same caregiver " +
+                    "timeline. Only the physical action and the network hop are " +
+                    "skipped: alerts are written to the on-device demo store."
+            } else {
+                "Debug builds only. Each button runs the real detection pipeline - " +
+                    "the same Firestore write, security rules and caregiver " +
+                    "notification. Only the physical action is skipped."
+            },
             tone = BannerTone.Info,
         )
 
