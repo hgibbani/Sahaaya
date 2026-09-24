@@ -18,6 +18,20 @@ data class Pairing(
     val caregiverId: String,
     val patientName: String,
     val caregiverName: String,
+    /**
+     * Phone numbers copied onto the pairing when it is created.
+     *
+     * Denormalised deliberately. A patient cannot read the caregiver's
+     * `users/{uid}` document - the rules only grant that in the caregiver ->
+     * patient direction - so without a copy here the patient's "Call caregiver"
+     * button would have no number to dial. Copying it onto the consent record
+     * both sides already read avoids widening that rule.
+     *
+     * Each side writes its own number: the patient's travels on the pairing
+     * code, the caregiver's is added as they redeem it.
+     */
+    val patientPhone: String = "",
+    val caregiverPhone: String = "",
     val status: PairingStatus,
     val createdAtEpochMillis: Long = 0L,
     val revokedAtEpochMillis: Long? = null,
@@ -58,6 +72,8 @@ data class PairingCode(
     val code: String,
     val patientId: String,
     val patientName: String,
+    /** Carried so the caregiver can copy it onto the pairing when redeeming. */
+    val patientPhone: String = "",
     val createdAtEpochMillis: Long,
     val expiresAtEpochMillis: Long,
     val redeemedByCaregiverId: String? = null,
@@ -71,6 +87,20 @@ data class PairingCode(
     companion object {
         const val ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
         const val LENGTH = 6
-        const val VALIDITY_MILLIS = 15 * 60 * 1000L
+        /**
+         * One hour, not fifteen minutes.
+         *
+         * The expiry is written using the patient's clock and then judged twice:
+         * once on the caregiver's device and once by a Firestore rule against
+         * *server* time. Three clocks means a short window can close while the
+         * code is still on screen - and the server-side rejection surfaces as
+         * "You do not have permission to do that", which reads like a security
+         * failure rather than an expired code.
+         *
+         * An hour is still short enough that a leaked code is not a standing
+         * risk, and it must stay <= the cap in firestore.rules, which is
+         * enforced server-side on creation.
+         */
+        const val VALIDITY_MILLIS = 60 * 60 * 1000L
     }
 }
