@@ -6,6 +6,7 @@ import com.sahaaya.core.result.Outcome
 import com.sahaaya.domain.model.EventType
 import com.sahaaya.domain.model.HealthEvent
 import com.sahaaya.domain.repository.AuthRepository
+import com.sahaaya.domain.usecase.event.AcknowledgeAllEventsUseCase
 import com.sahaaya.domain.usecase.event.AcknowledgeEventUseCase
 import com.sahaaya.domain.usecase.event.ObserveCaregiverTimelineUseCase
 import com.sahaaya.domain.usecase.event.SummariseEventsUseCase
@@ -26,8 +27,15 @@ data class TimelineUiState(
     val filter: EventType? = null,
     val isLoading: Boolean = true,
     val acknowledgingEventId: String? = null,
+    val isClearingAll: Boolean = false,
     val errorMessage: String? = null,
 ) {
+    /** Ids the "Clear all" action would acknowledge. Only unresolved ones. */
+    val clearableEventIds: List<String>
+        get() = visibleEvents.filter { it.isUnresolved }.map { it.id }
+
+    val canClearAll: Boolean get() = clearableEventIds.isNotEmpty() && !isClearingAll
+
     val visibleEvents: List<HealthEvent>
         get() = if (filter == null) events else events.filter { it.type == filter }
 
@@ -50,12 +58,14 @@ class TimelineViewModel @Inject constructor(
     observeTimeline: ObserveCaregiverTimelineUseCase,
     private val summariseEvents: SummariseEventsUseCase,
     private val acknowledgeEvent: AcknowledgeEventUseCase,
+    private val acknowledgeAllEvents: AcknowledgeAllEventsUseCase,
 ) : ViewModel() {
 
     private val caregiverId = authRepository.currentUserId()
 
     private val filter = MutableStateFlow<EventType?>(null)
     private val acknowledging = MutableStateFlow<String?>(null)
+    private val clearingAll = MutableStateFlow(false)
     private val error = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<TimelineUiState> =
@@ -66,8 +76,9 @@ class TimelineViewModel @Inject constructor(
                 observeTimeline(caregiverId),
                 filter,
                 acknowledging,
+                clearingAll,
                 error,
-            ) { events, selectedFilter, acknowledgingId, errorMessage ->
+            ) { events, selectedFilter, acknowledgingId, isClearingAll, errorMessage ->
                 TimelineUiState(
                     // Sorted client-side as well as in the query: the caregiver
                     // timeline merges several patients, and a caregiver looking
@@ -77,6 +88,7 @@ class TimelineViewModel @Inject constructor(
                     filter = selectedFilter,
                     isLoading = false,
                     acknowledgingEventId = acknowledgingId,
+                    isClearingAll = isClearingAll,
                     errorMessage = errorMessage,
                 )
             }
@@ -100,6 +112,34 @@ class TimelineViewModel @Inject constructor(
                 is Outcome.Failure -> error.update { result.error.message }
             }
             acknowledging.update { null }
+        }
+    }
+
+    /**
+     * Clears every outstanding alert currently in view.
+     *
+     * Scoped to `visibleEvents`, so clearing while a type filter is applied
+     * clears what the caregiver can actually see rather than silently
+     * acknowledging alerts they are not looking at.
+     */
+    fun clearAll() {
+        val ids = uiState.value.clearableEventIds
+        if (ids.isEmpty() || clearingAll.value) return
+        clearingAll.update { true }
+
+        viewModelScope.launch {
+            when (val result = acknowledgeAllEvents(ids)) {
+                is Outcome.Success -> error.update {
+                    if (result.data == 0) {
+                        null
+                    } else {
+                        "${result.data} of ${ids.size} alert(s) could not be cleared. " +
+                            "Pull down to refresh and try again."
+                    }
+                }
+                is Outcome.Failure -> error.update { result.error.message }
+            }
+            clearingAll.update { false }
         }
     }
 

@@ -17,9 +17,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +63,7 @@ fun TimelineScreen(
         onNavigateBack = onNavigateBack,
         onOpenEvent = onOpenEvent,
         onFilter = viewModel::setFilter,
+        onClearAll = viewModel::clearAll,
         modifier = modifier,
     )
 }
@@ -68,6 +74,7 @@ private fun TimelineContent(
     onNavigateBack: () -> Unit,
     onOpenEvent: (String) -> Unit,
     onFilter: (EventType?) -> Unit,
+    onClearAll: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     if (state.isLoading) {
@@ -75,10 +82,53 @@ private fun TimelineContent(
         return
     }
 
+    // Confirmation is not optional here. Clearing 61 alerts is one tap that
+    // cannot be undone from this screen, and a stray tap next to the filter
+    // chips should not silently mark a genuine emergency as seen.
+    var confirmingClearAll by remember { mutableStateOf(false) }
+
+    if (confirmingClearAll) {
+        AlertDialog(
+            onDismissRequest = { confirmingClearAll = false },
+            title = { Text("Clear all alerts?") },
+            text = {
+                Text(
+                    "This marks all ${state.clearableEventIds.size} outstanding " +
+                        "alert(s) as seen. They stay in your history with their " +
+                        "time and details - nothing is deleted.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmingClearAll = false
+                        onClearAll()
+                    },
+                ) {
+                    Text("Clear all")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingClearAll = false }) { Text("Cancel") }
+            },
+        )
+    }
+
     SahaayaScreen(
         title = "Alerts",
         onNavigateBack = onNavigateBack,
         modifier = modifier,
+        actions = {
+            if (state.canClearAll) {
+                TextButton(onClick = { confirmingClearAll = true }) { Text("Clear all") }
+            } else if (state.isClearingAll) {
+                Text(
+                    text = "Clearing…",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
     ) {
         if (state.errorMessage != null) Banner(message = state.errorMessage)
 

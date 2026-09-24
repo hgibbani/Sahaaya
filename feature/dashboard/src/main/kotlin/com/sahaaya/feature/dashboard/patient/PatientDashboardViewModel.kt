@@ -2,19 +2,28 @@ package com.sahaaya.feature.dashboard.patient
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.sahaaya.core.demo.FeatureScope
 import com.sahaaya.core.result.Outcome
 import com.sahaaya.domain.model.EmergencyContact
+import com.sahaaya.domain.model.MedicationDose
 import com.sahaaya.domain.model.MonitoringSettings
 import com.sahaaya.domain.model.Pairing
+import com.sahaaya.domain.model.PatientLocation
 import com.sahaaya.domain.model.PatientProfile
+import com.sahaaya.domain.model.SafeZoneStatus
 import com.sahaaya.domain.model.User
 import com.sahaaya.domain.repository.AuthRepository
 import com.sahaaya.domain.usecase.auth.SignOutUseCase
 import com.sahaaya.domain.usecase.medication.ObservePendingDosesUseCase
+import com.sahaaya.domain.usecase.monitoring.EnsureMonitoringRunningUseCase
 import com.sahaaya.domain.usecase.monitoring.ObserveMonitoringSettingsUseCase
+import com.sahaaya.domain.usecase.monitoring.PublishCurrentLocationUseCase
 import com.sahaaya.domain.usecase.monitoring.TriggerSosUseCase
 import com.sahaaya.domain.usecase.pairing.ObservePatientCaregiversUseCase
 import com.sahaaya.domain.usecase.profile.ObserveEmergencyContactsUseCase
+import com.sahaaya.domain.model.TrackingState
+import com.sahaaya.domain.usecase.monitoring.ObserveMyTrackingStateUseCase
+import com.sahaaya.domain.usecase.profile.ObservePatientLocationUseCase
 import com.sahaaya.domain.usecase.profile.ObservePatientProfileUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +31,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -33,6 +43,9 @@ data class PatientDashboardUiState(
     val caregivers: List<Pairing> = emptyList(),
     val emergencyContacts: List<EmergencyContact> = emptyList(),
     val settings: MonitoringSettings? = null,
+    /** Today's doses, newest first. Shown inline so the dashboard answers
+     *  "what do I take next" without a second screen. */
+    val pendingDoses: List<MedicationDose> = emptyList(),
     val pendingDoseCount: Int = 0,
     val isLoading: Boolean = true,
     val isSendingSos: Boolean = false,
@@ -46,6 +59,14 @@ data class PatientDashboardUiState(
 
     val hasNoEmergencyContact: Boolean get() = emergencyContacts.isEmpty()
 
+    /** The first linked caregiver who has a phone number to dial. */
+    val callableCaregiver: Pairing?
+        get() = caregivers.firstOrNull { it.isActive && it.caregiverPhone.isNotBlank() }
+
+    /** Name shown next to the "Connected" chip. */
+    val caregiverName: String?
+        get() = caregivers.firstOrNull { it.isActive }?.caregiverName?.ifBlank { "Caregiver" }
+
     /**
      * Plain-language statement of what the phone is currently watching.
      *
@@ -56,9 +77,12 @@ data class PatientDashboardUiState(
         get() {
             val current = settings ?: return null
             val active = buildList {
-                if (current.fallDetectionEnabled) add("falls")
+                if (current.fallDetectionEnabled && FeatureScope.FALL_DETECTION_ACTIVE) add("falls")
+                // (Fall detection is off in this build, so it is never listed.)
                 if (current.geofenceEnabled && current.safeZone != null) add("your safe zone")
-                if (current.inactivityDetectionEnabled) add("long periods without movement")
+                if (current.inactivityDetectionEnabled && FeatureScope.INACTIVITY_DETECTION_ACTIVE) {
+                    add("long periods without movement")
+                }
             }
             return if (active.isEmpty()) {
                 "Monitoring is switched off. Tap Monitoring settings to turn it on."
@@ -80,8 +104,12 @@ class PatientDashboardViewModel @Inject constructor(
     observeEmergencyContacts: ObserveEmergencyContactsUseCase,
     observeSettings: ObserveMonitoringSettingsUseCase,
     observePendingDoses: ObservePendingDosesUseCase,
+    observePatientLocation: ObservePatientLocationUseCase,
+    observeMyTrackingState: ObserveMyTrackingStateUseCase,
     private val triggerSos: TriggerSosUseCase,
     private val signOutUseCase: SignOutUseCase,
+    private val ensureMonitoringRunning: EnsureMonitoringRunningUseCase,
+    private val publishCurrentLocation: PublishCurrentLocationUseCase,
 ) : ViewModel() {
 
     private val uid = authRepository.currentUserId()
@@ -93,6 +121,32 @@ class PatientDashboardViewModel @Inject constructor(
         val sosSentMessage: String? = null,
         val errorMessage: String? = null,
     )
+
+    init {
+        // The patient should not have to visit a settings screen - or Developer
+        // Mode - to actually be monitored. Opening the dashboard is the signal
+        // that this phone is the patient's phone, so the detectors their saved
+        // settings ask for are started here.
+        //
+        // A failure is surfaced in the UI state rather than thrown: a refused
+        // permission should cost monitoring, not the whole dashboard.
+        // One fix now, so a caregiver who has not yet drawn a safe zone still
+        // has a position to centre one on. Without this the two features
+        // deadlock: no zone means no tracking, and no tracking means no
+        // position to place a zone at.
+        viewModelScope.launch { publishCurrentLocation() }
+
+        viewModelScope.launch {
+            if (ensureMonitoringRunning() is Outcome.Failure) {
+                transient.update {
+                    it.copy(
+                        errorMessage = "Monitoring could not be started. Open " +
+                            "Monitoring settings to check permissions.",
+                    )
+                }
+            }
+        }
+    }
 
     val uiState: StateFlow<PatientDashboardUiState> =
         if (uid == null) {
@@ -129,6 +183,7 @@ class PatientDashboardViewModel @Inject constructor(
                     caregivers = caregivers,
                     emergencyContacts = contacts,
                     settings = settings,
+                    pendingDoses = pending.sortedBy { it.scheduledAtEpochMillis },
                     pendingDoseCount = pending.size,
                     isLoading = false,
                     isSendingSos = extra.isSendingSos,
@@ -140,6 +195,58 @@ class PatientDashboardViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
             initialValue = PatientDashboardUiState(),
+        )
+
+    /**
+     * The patient's own safe-zone standing, so their dashboard says the same
+     * thing their caregiver is looking at.
+     *
+     * Read back from Firestore rather than recomputed here: the monitoring
+     * service is the one place that decides inside or outside, and a second
+     * opinion on the dashboard could disagree with the caregiver's screen.
+     */
+    /**
+     * The patient's own last published position, for the Location tile. The
+     * same document the caregiver reads, so both screens show the same point.
+     */
+    val ownLocation: StateFlow<PatientLocation?> =
+        (if (uid == null) flowOf(null) else observePatientLocation(uid))
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+                initialValue = null,
+            )
+
+    /**
+     * Whether a caregiver currently has tracking on for this patient.
+     *
+     * Read-only on this side. There is intentionally no method here that writes
+     * it, and the Firestore rule refuses the write even if one were added.
+     */
+    val trackingState: StateFlow<TrackingState> = observeMyTrackingState()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+            initialValue = TrackingState.INACTIVE,
+        )
+
+    val safeZoneStatus: StateFlow<SafeZoneStatus> =
+        (
+            if (uid == null) {
+                flowOf(SafeZoneStatus.UNKNOWN)
+            } else {
+                observePatientLocation(uid).map { location ->
+                    when {
+                        location == null -> SafeZoneStatus.UNKNOWN
+                        location.isStale -> SafeZoneStatus.UNKNOWN
+                        else -> location.status
+                    }
+                }
+            }
+            ).stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+            initialValue = SafeZoneStatus.UNKNOWN,
         )
 
     /**

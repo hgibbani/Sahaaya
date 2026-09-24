@@ -49,6 +49,7 @@ fun PatientProfileScreen(
         onDateOfBirthChange = viewModel::onDateOfBirthChange,
         onGenderChange = viewModel::onGenderChange,
         onBloodGroupChange = viewModel::onBloodGroupChange,
+        onHeightChange = viewModel::onHeightChange,
         onAddressChange = viewModel::onAddressChange,
         onDiagnosisStageChange = viewModel::onDiagnosisStageChange,
         onDiagnosedOnChange = viewModel::onDiagnosedOnChange,
@@ -68,6 +69,7 @@ private fun PatientProfileContent(
     onDateOfBirthChange: (String) -> Unit,
     onGenderChange: (Gender) -> Unit,
     onBloodGroupChange: (String) -> Unit,
+    onHeightChange: (String) -> Unit = {},
     onAddressChange: (String) -> Unit,
     onDiagnosisStageChange: (DementiaStage) -> Unit,
     onDiagnosedOnChange: (String) -> Unit,
@@ -147,6 +149,13 @@ private fun PatientProfileContent(
             supportingText = "Optional, but useful in an emergency",
             capitalization = KeyboardCapitalization.Characters,
             enabled = !state.isSaving,
+        )
+
+        SahaayaTextField(
+            value = state.height,
+            onValueChange = onHeightChange,
+            label = "Height",
+            supportingText = "For example 158 cm or 5 ft 2 in",
         )
 
         SahaayaTextField(
@@ -231,8 +240,10 @@ private fun ReadOnlyProfile(state: PatientProfileUiState) {
     }
     SahaayaCard {
         DetailRow(label = "Date of birth", value = state.dateOfBirth)
+        ageFrom(state.dateOfBirth)?.let { DetailRow(label = "Age", value = "$it years") }
         DetailRow(label = "Gender", value = state.gender.displayName)
         DetailRow(label = "Blood group", value = state.bloodGroup)
+        DetailRow(label = "Height", value = state.height)
     }
     Text(
         text = "You can see this because you are linked to this patient. " +
@@ -268,4 +279,23 @@ private fun PatientProfilePreview() {
             onSave = {},
         )
     }
+}
+
+/**
+ * Age in whole years from a date of birth, or null if it cannot be read.
+ *
+ * Accepts the format the field's own hint asks for (14-03-1952), the same with
+ * slashes, and ISO (1952-03-14) as older records store it. Derived rather than
+ * stored, so it never goes stale on a birthday.
+ */
+private fun ageFrom(dateOfBirth: String?): Int? {
+    val text = dateOfBirth?.trim().orEmpty()
+    if (text.isEmpty()) return null
+    val date = listOf("dd-MM-yyyy", "dd/MM/yyyy", "yyyy-MM-dd").firstNotNullOfOrNull { pattern ->
+        runCatching {
+            java.time.LocalDate.parse(text, java.time.format.DateTimeFormatter.ofPattern(pattern))
+        }.getOrNull()
+    } ?: return null
+    val years = java.time.Period.between(date, java.time.LocalDate.now()).years
+    return years.takeIf { it in 0..130 }
 }
