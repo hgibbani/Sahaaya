@@ -30,6 +30,12 @@ object FirestoreCollections {
     const val EMERGENCY_CONTACTS = "emergencyContacts"
 
     /**
+     * `patients/{uid}/reminders/{reminderId}` - appointments and health checks,
+     * shared between the patient and their paired caregivers.
+     */
+    const val REMINDERS = "reminders"
+
+    /**
      * `events/{eventId}` - falls, geofence exits, inactivity, SOS, missed doses.
      *
      * Top-level rather than a sub-collection of the patient, so a caregiver
@@ -54,6 +60,19 @@ object FirestoreCollections {
 
     /** `settings/{patientId}` - monitoring thresholds and the safe zone. */
     const val SETTINGS = "settings"
+
+    /**
+     * `trackingSessions/{sessionId}` - one caregiver-requested watch.
+     *
+     * Top-level rather than nested under the patient because the route beneath
+     * it is the only unbounded-growth collection this feature adds, and keeping
+     * it out of `patients/{uid}` means a caregiver reading a patient's clinical
+     * document never incidentally pages through their movements.
+     */
+    const val TRACKING_SESSIONS = "trackingSessions"
+
+    /** `trackingSessions/{sessionId}/locations/{id}` - the route points. */
+    const val TRACK_LOCATIONS = "locations"
 }
 
 /** Field names on `events/{eventId}`. */
@@ -115,6 +134,48 @@ object SettingsFields {
     const val MEDICATION_REMINDERS_ENABLED = "medicationRemindersEnabled"
     const val MISSED_DOSE_GRACE = "missedDoseGraceMinutes"
     const val UPDATED_AT = "updatedAt"
+
+    // --- caregiver-controlled live tracking --------------------------------
+    //
+    // These live on the patient's settings document so the patient's phone can
+    // watch them with the listener it already has - but unlike every other key
+    // here, they are written by the CAREGIVER and are read-only to the patient.
+    // The Firestore rule enforces that split; [TRACKING_KEYS] is the list it
+    // and the rule must agree on.
+
+    const val TRACKING_ACTIVE = "trackingActive"
+    const val TRACKING_SESSION_ID = "trackingSessionId"
+    const val TRACKING_STARTED_AT = "trackingStartedAt"
+    const val TRACKING_STARTED_BY = "trackingStartedBy"
+    const val TRACKING_STOPPED_AT = "trackingStoppedAt"
+    const val TRACKING_STOPPED_BY = "trackingStoppedBy"
+
+    /** Every field a patient must never be able to write. */
+    val TRACKING_KEYS = listOf(
+        TRACKING_ACTIVE,
+        TRACKING_SESSION_ID,
+        TRACKING_STARTED_AT,
+        TRACKING_STARTED_BY,
+        TRACKING_STOPPED_AT,
+        TRACKING_STOPPED_BY,
+    )
+}
+
+/** Field names on `trackingSessions/{sessionId}`. */
+object TrackingSessionFields {
+    const val PATIENT_ID = "patientId"
+    const val CAREGIVER_ID = "caregiverId"
+    const val STARTED_AT = "startedAt"
+    const val STOPPED_AT = "stoppedAt"
+    const val ACTIVE = "active"
+}
+
+/** Field names on `trackingSessions/{sessionId}/locations/{id}`. */
+object TrackPointFields {
+    const val LATITUDE = "latitude"
+    const val LONGITUDE = "longitude"
+    const val ACCURACY = "accuracy"
+    const val TIMESTAMP = "timestamp"
 }
 
 /** Field names on `users/{uid}`. */
@@ -136,6 +197,7 @@ object PatientFields {
     const val DATE_OF_BIRTH = "dateOfBirth"
     const val GENDER = "gender"
     const val BLOOD_GROUP = "bloodGroup"
+    const val HEIGHT = "height"
     const val ADDRESS = "address"
     const val DIAGNOSIS_STAGE = "diagnosisStage"
     const val DIAGNOSED_ON = "diagnosedOn"
@@ -143,6 +205,20 @@ object PatientFields {
     const val ALLERGIES = "allergies"
     const val PRIMARY_CAREGIVER_ID = "primaryCaregiverId"
     const val UPDATED_AT = "updatedAt"
+
+    // --- Latest position -----------------------------------------------------
+    // Written by the patient's own device and read by an actively paired
+    // caregiver. They live on this document because its existing rules already
+    // express exactly that, so no rule had to be widened to carry them.
+    //
+    // Always written as a targeted merge, never as part of the profile map, so
+    // that saving the profile screen cannot blank the patient's location.
+    const val LAST_LATITUDE = "lastLatitude"
+    const val LAST_LONGITUDE = "lastLongitude"
+    const val LAST_ACCURACY = "lastAccuracyMetres"
+    const val LAST_LOCATION_AT = "lastLocationAt"
+    const val SAFE_ZONE_STATUS = "safeZoneStatus"
+    const val METRES_FROM_BOUNDARY = "metresFromBoundary"
 }
 
 /** Field names on `caregivers/{uid}`. */
@@ -161,6 +237,8 @@ object PairingFields {
     const val CAREGIVER_ID = "caregiverId"
     const val PATIENT_NAME = "patientName"
     const val CAREGIVER_NAME = "caregiverName"
+    const val PATIENT_PHONE = "patientPhone"
+    const val CAREGIVER_PHONE = "caregiverPhone"
     const val STATUS = "status"
     const val CREATED_AT = "createdAt"
     const val REVOKED_AT = "revokedAt"
@@ -171,6 +249,7 @@ object PairingCodeFields {
     const val CODE = "code"
     const val PATIENT_ID = "patientId"
     const val PATIENT_NAME = "patientName"
+    const val PATIENT_PHONE = "patientPhone"
     const val CREATED_AT = "createdAt"
     const val EXPIRES_AT = "expiresAt"
     const val REDEEMED_BY = "redeemedByCaregiverId"
@@ -184,4 +263,19 @@ object EmergencyContactFields {
     const val RELATIONSHIP = "relationship"
     const val PRIORITY = "priority"
     const val IS_PRIMARY = "isPrimary"
+}
+
+/** Field names on `patients/{uid}/reminders/{reminderId}`. */
+object ReminderFields {
+    const val ID = "id"
+    const val PATIENT_ID = "patientId"
+    const val TYPE = "type"
+    const val TITLE = "title"
+    const val HOSPITAL_NAME = "hospitalName"
+    const val DOCTOR_NAME = "doctorName"
+    const val SCHEDULED_AT = "scheduledAt"
+    const val NOTES = "notes"
+    const val CREATED_BY_UID = "createdByUid"
+    const val CREATED_BY_NAME = "createdByName"
+    const val CREATED_AT = "createdAt"
 }

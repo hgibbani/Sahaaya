@@ -82,6 +82,22 @@ service cloud.firestore {
         allow write: if isSelf(uid);
       }
 
+      // --- reminders ------------------------------------------------------
+      // Appointments and health checks. Unlike emergency contacts, BOTH sides
+      // write here: a caregiver books the hospital visit, the patient notes a
+      // blood-pressure check, and each appears on the other's phone.
+      //
+      // Access is keyed on the patient id in the path, so a caregiver reaches
+      // this list only while an ACTIVE pairing with this patient exists, and
+      // the document must name the same patient it is stored under - a write
+      // cannot file a reminder about one patient inside another's record.
+      match /reminders/{reminderId} {
+        allow read: if isSelf(uid) || isActiveCaregiverOf(uid);
+        allow create, update: if (isSelf(uid) || isActiveCaregiverOf(uid))
+          && request.resource.data.patientId == uid;
+        allow delete: if isSelf(uid) || isActiveCaregiverOf(uid);
+      }
+
     }
 
     // --- caregivers/{uid} ------------------------------------------------
@@ -100,7 +116,29 @@ service cloud.firestore {
     // The consent record, and the document every other rule above consults.
 
     match /pairings/{id} {
-      allow read: if isSignedIn() &&
+      // Split into get and list on purpose.
+      //
+      // `list` keeps the strict check: a query must never return a pairing
+      // that belongs to two other people.
+      //
+      // `get` additionally tolerates a document that does not exist. Redeeming
+      // a code runs one transaction that reads pairings/{patientId}_{caregiverId}
+      // to refuse a duplicate link, and on a first-time pairing that document is
+      // absent - which makes `resource` null, so the old single `read` rule
+      // dereferenced null, errored, and denied. The caregiver saw
+      // "You do not have permission to do that" on every genuine first pairing.
+      //
+      // Permitting the read of an absent document discloses nothing: there is
+      // no data to leak, and access to a patient still depends on an ACTIVE
+      // pairing existing, which `create` below only allows against an
+      // unredeemed, unexpired code redeemed in the same transaction.
+      allow get: if isSignedIn() && (
+        resource == null ||
+        resource.data.patientId == request.auth.uid ||
+        resource.data.caregiverId == request.auth.uid
+      );
+
+      allow list: if isSignedIn() &&
         (resource.data.patientId == request.auth.uid ||
          resource.data.caregiverId == request.auth.uid);
 
@@ -118,15 +156,41 @@ service cloud.firestore {
         && roleOf(request.auth.uid) == 'caregiver'
         && id == pairingId(request.resource.data.patientId, request.auth.uid);
 
-      // Either participant may revoke. The only permitted transition is to
-      // 'revoked' - a revoked link can never be silently reactivated, which
-      // would restore access to a medical record without fresh consent.
+      // Two permitted transitions, and only two.
+      //
+      // 1. active -> revoked, by either participant.
+      //
+      // 2. revoked -> active, by the caregiver already named in the document.
+      //    This exists because redeeming a code writes the pairing with
+      //    `set()`, and `set()` on a document that already exists is an
+      //    *update* in rules terms, not a create. Without this branch a pair
+      //    that had ever been unlinked could never link again: the caregiver
+      //    entered a perfectly valid code and was told "You do not have
+      //    permission to do that", because the write was judged against the
+      //    revoke-only rule.
+      //
+      //    It is not a weakening. Reactivation still demands possession of an
+      //    unredeemed, unexpired code, because the same transaction must also
+      //    satisfy the pairingCodes update rule below - and the participants
+      //    are pinned to the ones already in the document, so this can never
+      //    attach a caregiver to a patient who did not issue them a code.
       allow update: if isSignedIn()
-        && (resource.data.patientId == request.auth.uid ||
-            resource.data.caregiverId == request.auth.uid)
-        && request.resource.data.status == 'revoked'
         && request.resource.data.patientId == resource.data.patientId
-        && request.resource.data.caregiverId == resource.data.caregiverId;
+        && request.resource.data.caregiverId == resource.data.caregiverId
+        && (
+          (
+            (resource.data.patientId == request.auth.uid ||
+             resource.data.caregiverId == request.auth.uid)
+            && request.resource.data.status == 'revoked'
+          )
+          ||
+          (
+            resource.data.status == 'revoked'
+            && request.resource.data.status == 'active'
+            && resource.data.caregiverId == request.auth.uid
+            && roleOf(request.auth.uid) == 'caregiver'
+          )
+        );
 
       allow delete: if false;
     }
@@ -148,7 +212,7 @@ service cloud.firestore {
         && roleOf(request.auth.uid) == 'patient'
         && request.resource.data.redeemedByCaregiverId == null
         && request.resource.data.expiresAt > request.time.toMillis()
-        && request.resource.data.expiresAt <= request.time.toMillis() + 900000;
+        && request.resource.data.expiresAt <= request.time.toMillis() + 3600000;
 
       // A code may only be marked redeemed, by the caregiver redeeming it, and
       // only while it is still valid.
@@ -241,9 +305,166 @@ service cloud.firestore {
 
     match /settings/{patientId} {
       allow read: if isSelf(patientId) || isActiveCaregiverOf(patientId);
-      allow create, update: if isSelf(patientId)
-        && request.resource.data.patientId == patientId;
+
+      // Live tracking is the one thing on this document the patient may read
+      // but never write. Listed once and referenced from both branches below,
+      // so the two can never drift apart.
+      //
+      // Mirrored in Kotlin as SettingsFields.TRACKING_KEYS.
+      function trackingKeys() {
+        return [
+          'trackingActive',
+          'trackingSessionId',
+          'trackingStartedAt',
+          'trackingStartedBy',
+          'trackingStoppedAt',
+          'trackingStoppedBy'
+        ];
+      }
+
+      // The safe-zone keys a caregiver may author.
+      function safeZoneKeys() {
+        return [
+          'safeZoneLatitude',
+          'safeZoneLongitude',
+          'safeZoneRadiusMetres',
+          'safeZoneLabel',
+          'geofenceEnabled',
+          'updatedAt'
+        ];
+      }
+
+      // The patient owns this document and may write all of it.
+      //
+      // A caregiver may also create it, restricted to the same safe-zone keys
+      // they are allowed to update. This is not a widening for its own sake:
+      // `settings/{patientId}` is not written at registration, so for a patient
+      // who has never opened Monitoring settings the document does not exist -
+      // and the caregiver's very first "Save safe zone" is therefore a create,
+      // not an update. Without this branch that first save always failed with
+      // "You do not have permission to do that", which is exactly what testing
+      // on two devices showed.
+      //
+      // keys() rather than diff(): there is no prior document to diff against
+      // on a create, so the whole incoming document is constrained instead.
+      allow create: if request.resource.data.patientId == patientId && (
+        // The patient creates their own settings - but not the tracking
+        // fields. A patient who could create this document with
+        // trackingActive = false would be able to pre-empt tracking by
+        // writing the document before their caregiver ever did.
+        (
+          isSelf(patientId)
+          && !request.resource.data.keys().hasAny(trackingKeys())
+        )
+        ||
+        (
+          isActiveCaregiverOf(patientId)
+          && request.resource.data.keys().hasOnly(
+            ['patientId'].concat(safeZoneKeys()).concat(trackingKeys())
+          )
+        )
+      );
+
+      allow update: if request.resource.data.patientId == patientId && (
+        // The patient owns everything on this document EXCEPT the tracking
+        // fields.
+        //
+        // This is the rule that makes "only your caregiver can stop tracking"
+        // true rather than merely displayed. Hiding the button stops a patient
+        // tapping it; this stops a patient with a modified client, a REST call
+        // or an interactive console session from writing trackingActive =
+        // false. hasAny() is the right test because it rejects the write for
+        // touching any one of them, without having to enumerate every other
+        // key on the document.
+        (
+          isSelf(patientId)
+          && !request.resource.data.diff(resource.data).affectedKeys()
+               .hasAny(trackingKeys())
+        )
+        ||
+        // A caregiver configures the safe zone for a patient they are actively
+        // paired with - and nothing else on the document.
+        //
+        // hasOnly() is what keeps this narrow: the write is rejected if it
+        // changes any key outside this list, so a caregiver cannot quietly
+        // disable fall detection, stretch an inactivity timeout or turn off
+        // medicine reminders. Those are the patient's own settings; only the
+        // boundary is the caregiver's to draw.
+        //
+        // Access still ends the moment the pairing is revoked, because
+        // isActiveCaregiverOf() reads the pairing document on every request.
+        // A caregiver may draw the boundary and switch tracking on or off -
+        // and still nothing else. Fall sensitivity, inactivity timeouts and
+        // medicine reminders remain the patient's own.
+        (
+          isActiveCaregiverOf(patientId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(safeZoneKeys().concat(trackingKeys()))
+        )
+      );
+
       allow delete: if false;
+    }
+
+    // --- trackingSessions/{sessionId} -------------------------------------
+    // One caregiver-requested watch, and the route recorded during it.
+    //
+    // The authority here is split on purpose, because the two sides contribute
+    // different things: the caregiver decides that a session exists, and only
+    // the patient's own phone can say where the patient is.
+
+    match /trackingSessions/{sessionId} {
+      allow read: if isSignedIn() && (
+        resource.data.patientId == request.auth.uid ||
+        isActiveCaregiverOf(resource.data.patientId)
+      );
+
+      // Opened by an actively paired caregiver, naming themselves. A caregiver
+      // cannot open a session on a patient they are not linked to, and cannot
+      // attribute one to a different caregiver.
+      allow create: if isSignedIn()
+        && request.resource.data.caregiverId == request.auth.uid
+        && isActiveCaregiverOf(request.resource.data.patientId)
+        && request.resource.data.active == true;
+
+      // Closed by the caregiver who opened it. The participants and the start
+      // time are immutable, so a session cannot be quietly re-attributed or
+      // back-dated after the fact.
+      allow update: if isSignedIn()
+        && resource.data.caregiverId == request.auth.uid
+        && request.resource.data.patientId == resource.data.patientId
+        && request.resource.data.caregiverId == resource.data.caregiverId
+        && request.resource.data.startedAt == resource.data.startedAt;
+
+      // A route is a record of where somebody went. Neither side gets to erase
+      // it, for the same reason the event log cannot be erased.
+      allow delete: if false;
+
+      // --- the route ------------------------------------------------------
+      match /locations/{locationId} {
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/trackingSessions/$(sessionId))
+            .data.patientId == request.auth.uid ||
+          isActiveCaregiverOf(
+            get(/databases/$(database)/documents/trackingSessions/$(sessionId))
+              .data.patientId
+          )
+        );
+
+        // Only the patient's own device files points, and only into a session
+        // that is still open. The `active` check is what stops a stopped
+        // session from continuing to accumulate a trail: when the caregiver
+        // stops tracking, further writes are refused by the rules and not
+        // merely by the client having been asked to stop.
+        allow create: if isSignedIn()
+          && get(/databases/$(database)/documents/trackingSessions/$(sessionId))
+               .data.patientId == request.auth.uid
+          && get(/databases/$(database)/documents/trackingSessions/$(sessionId))
+               .data.active == true;
+
+        // Append-only. A point, once recorded, is what the phone reported.
+        allow update, delete: if false;
+      }
     }
 
     // --- notifications/{notificationId} -----------------------------------

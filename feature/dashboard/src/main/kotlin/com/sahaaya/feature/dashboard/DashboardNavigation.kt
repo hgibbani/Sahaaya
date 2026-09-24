@@ -35,6 +35,8 @@ fun NavGraphBuilder.patientDashboard(
     onOpenMedications: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenDemoMode: (() -> Unit)?,
+    onOpenReminders: () -> Unit = {},
+    onOpenTrackingStatus: () -> Unit = {},
 ) {
     composable(DashboardRoutes.PATIENT) {
         PatientDashboardScreen(
@@ -44,6 +46,8 @@ fun NavGraphBuilder.patientDashboard(
             onOpenMedications = onOpenMedications,
             onOpenSettings = onOpenSettings,
             onOpenDemoMode = onOpenDemoMode,
+            onOpenReminders = onOpenReminders,
+            onOpenTrackingStatus = onOpenTrackingStatus,
         )
     }
 }
@@ -55,6 +59,9 @@ fun NavGraphBuilder.caregiverDashboard(
     onOpenPatientMedications: (patientId: String) -> Unit,
     onOpenTimeline: () -> Unit,
     onOpenEvent: (eventId: String) -> Unit,
+    onOpenSafeZone: (patientId: String) -> Unit,
+    onOpenPatientReminders: (patientId: String) -> Unit = {},
+    onOpenLiveTracking: (patientId: String, patientName: String) -> Unit = { _, _ -> },
 ) {
     composable(DashboardRoutes.CAREGIVER) {
         CaregiverDashboardScreen(
@@ -64,6 +71,9 @@ fun NavGraphBuilder.caregiverDashboard(
             onOpenPatientMedications = onOpenPatientMedications,
             onOpenTimeline = onOpenTimeline,
             onOpenEvent = onOpenEvent,
+            onOpenSafeZone = onOpenSafeZone,
+            onOpenPatientReminders = onOpenPatientReminders,
+            onOpenLiveTracking = onOpenLiveTracking,
         )
     }
 }

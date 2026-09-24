@@ -9,21 +9,27 @@ import com.sahaaya.data.demo.DemoMedicationRepository
 import com.sahaaya.data.demo.DemoMessagingRepository
 import com.sahaaya.data.demo.DemoPairingRepository
 import com.sahaaya.data.demo.DemoProfileRepository
+import com.sahaaya.data.demo.DemoReminderRepository
 import com.sahaaya.data.demo.DemoSettingsRepository
+import com.sahaaya.data.demo.DemoTrackingRepository
 import com.sahaaya.data.repository.AuthRepositoryImpl
 import com.sahaaya.data.repository.EventRepositoryImpl
 import com.sahaaya.data.repository.MedicationRepositoryImpl
 import com.sahaaya.data.repository.MessagingRepositoryImpl
 import com.sahaaya.data.repository.PairingRepositoryImpl
 import com.sahaaya.data.repository.ProfileRepositoryImpl
+import com.sahaaya.data.repository.ReminderRepositoryImpl
 import com.sahaaya.data.repository.SettingsRepositoryImpl
+import com.sahaaya.data.repository.TrackingRepositoryImpl
 import com.sahaaya.domain.repository.AuthRepository
 import com.sahaaya.domain.repository.EventRepository
 import com.sahaaya.domain.repository.MedicationRepository
 import com.sahaaya.domain.repository.MessagingRepository
 import com.sahaaya.domain.repository.PairingRepository
 import com.sahaaya.domain.repository.ProfileRepository
+import com.sahaaya.domain.repository.ReminderRepository
 import com.sahaaya.domain.repository.SettingsRepository
+import com.sahaaya.domain.repository.TrackingRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -98,10 +104,24 @@ object DataModule {
 
     @Provides
     @Singleton
+    fun provideReminderRepository(
+        firebase: Provider<ReminderRepositoryImpl>,
+        demo: Provider<DemoReminderRepository>,
+    ): ReminderRepository = if (DemoConfig.ENABLED) demo.get() else firebase.get()
+
+    @Provides
+    @Singleton
     fun provideSettingsRepository(
         firebase: Provider<SettingsRepositoryImpl>,
         demo: Provider<DemoSettingsRepository>,
     ): SettingsRepository = if (DemoConfig.ENABLED) demo.get() else firebase.get()
+
+    @Provides
+    @Singleton
+    fun provideTrackingRepository(
+        firebase: Provider<TrackingRepositoryImpl>,
+        demo: Provider<DemoTrackingRepository>,
+    ): TrackingRepository = if (DemoConfig.ENABLED) demo.get() else firebase.get()
 }
 
 @Module
