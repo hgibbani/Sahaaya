@@ -1,9 +1,25 @@
-# Offline Demo Mode
+# Run modes
 
-The Firebase project the app is registered to is not currently billable, so
-every Firestore read and write fails. Rather than remove the Firebase layer —
-which is the real implementation and stays in the source tree untouched — the
-app can run against an in-memory backend instead.
+Sahaaya has two run modes, chosen by one constant. **The project currently ships
+in LIVE MODE**, which is the mode the two-device demonstration requires.
+
+| | LIVE MODE | LOCAL DEMO MODE |
+| --- | --- | --- |
+| `DemoConfig.ENABLED` | `false` (current) | `true` |
+| Backend | Firebase Auth + Cloud Firestore | in-memory `DemoDataStore` |
+| Devices | two or more, over the network | one, isolated |
+| Cross-device alerts | **yes** | **no — impossible** |
+| Needs a Firebase project | yes | no |
+
+### Why LOCAL DEMO MODE cannot do a two-device demo
+
+`DemoDataStore` is a `@Singleton` holding `MutableStateFlow` maps in the app's
+own process. A second device runs a second process with its own empty copy.
+Nothing raised on one phone can reach another. This is a property of the design,
+not a bug, and it is the reason the two-device demonstration runs on Firestore.
+
+Local demo mode remains useful for UI work, for developing without a Firebase
+project, and for showing the screens on a single device.
 
 ## The switch
 
@@ -11,12 +27,29 @@ app can run against an in-memory backend instead.
 
 ```kotlin
 object DemoConfig {
-    const val ENABLED: Boolean = true   // false = back on Firebase
+    const val ENABLED: Boolean = false  // false = Firebase, true = in-memory
 }
 ```
 
-That constant is the only thing to change. Setting it to `false` puts the app
-back on Firestore with no other edit anywhere in the tree.
+That constant is the only thing to change. Nothing above the repository
+contracts recompiles differently or knows which side won.
+
+## What LIVE MODE needs in the Firebase console
+
+For the project named in `app/google-services.json` (`sahaaya-72a9f`):
+
+1. **Authentication → Sign-in method →** enable **Email/Password**.
+2. **Firestore Database → Create database** (any region; asia-south1 is closest).
+3. **Deploy the rules** so the client is not blocked by default locked-mode:
+
+   ```bash
+   firebase login
+   firebase use sahaaya-72a9f
+   firebase deploy --only firestore:rules
+   ```
+
+All three are available on the free **Spark** plan. Only `functions/index.js`
+(FCM push to a closed app) requires the Blaze plan.
 
 ## How it is wired
 
@@ -49,7 +82,12 @@ timeline with no refresh.
 
 State lives for the life of the process. Killing the app resets it to the seed.
 
-## Seeded accounts
+## Seeded accounts (LOCAL DEMO MODE only)
+
+In LIVE MODE these accounts do not exist until they are registered against
+Firebase Auth from the app, because accounts live in the Firebase project rather
+than in a seeded map. Register them once and they persist.
+
 
 | Role | Email | Password |
 | --- | --- | --- |
@@ -64,10 +102,11 @@ Registration still works and creates further accounts alongside these.
 
 ## The badge
 
-`common…components.DemoModeBadge` renders a "DEMO MODE" pill in the top bar of
-the sign-in, registration, patient dashboard, caregiver dashboard and developer
-screens. `DemoModeBanner` on the sign-in screen spells out the seeded
-credentials. Both compose to nothing when `DemoConfig.ENABLED` is `false`.
+`common…components.DemoModeBadge` renders a pill in the top bar of the sign-in,
+registration, patient dashboard, caregiver dashboard and developer screens. It
+shows an amber **DEMO MODE** in local mode and a blue **LIVE** in live mode —
+never nothing, so a viewer is never left guessing which they are looking at.
+`DemoModeBanner` on the sign-in screen spells out what the current mode means.
 
 ## What to demonstrate
 

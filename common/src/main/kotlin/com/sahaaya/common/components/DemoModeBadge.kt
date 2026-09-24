@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,31 +33,47 @@ import com.sahaaya.core.demo.DemoConfig
  */
 @Composable
 fun DemoModeBadge(modifier: Modifier = Modifier) {
-    if (!DemoConfig.ENABLED) return
+    val demo = DemoConfig.ENABLED
 
     Row(
         modifier = modifier
             .background(
-                color = MaterialTheme.colorScheme.tertiaryContainer,
+                color = if (demo) {
+                    MaterialTheme.colorScheme.tertiaryContainer
+                } else {
+                    MaterialTheme.colorScheme.primaryContainer
+                },
                 shape = MaterialTheme.shapes.extraSmall,
             )
             .padding(horizontal = Dimens.SpaceSm, vertical = Dimens.SpaceXs)
             .clearAndSetSemantics {
-                contentDescription = "Demo mode. Data is stored on this device only."
+                contentDescription = if (demo) {
+                    "Demo mode. Data is stored on this device only."
+                } else {
+                    "Live mode. Data is shared with your caregiver over the network."
+                }
             },
         horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceXs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = Icons.Filled.CloudOff,
+            imageVector = if (demo) Icons.Filled.CloudOff else Icons.Filled.CloudDone,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+            tint = if (demo) {
+                MaterialTheme.colorScheme.onTertiaryContainer
+            } else {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            },
             modifier = Modifier.size(16.dp),
         )
         Text(
-            text = DemoConfig.BADGE_LABEL,
+            text = if (demo) DemoConfig.BADGE_LABEL else DemoConfig.LIVE_BADGE_LABEL,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onTertiaryContainer,
+            color = if (demo) {
+                MaterialTheme.colorScheme.onTertiaryContainer
+            } else {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            },
         )
     }
 }
@@ -67,13 +84,17 @@ fun DemoModeBadge(modifier: Modifier = Modifier) {
  */
 @Composable
 fun DemoModeBanner(modifier: Modifier = Modifier) {
-    if (!DemoConfig.ENABLED) return
-
     Banner(
-        message = "Demo mode: accounts and alerts are stored on this device only, " +
-            "not in Firebase. Sign in as ${DemoConfig.PATIENT_EMAIL} or " +
-            "${DemoConfig.CAREGIVER_EMAIL} with the password " +
-            "\"${DemoConfig.SEED_PASSWORD}\", or register a new account.",
+        message = if (DemoConfig.ENABLED) {
+            "Demo mode: accounts and alerts are stored on this device only, " +
+                "not in Firebase. Sign in as ${DemoConfig.PATIENT_EMAIL} or " +
+                "${DemoConfig.CAREGIVER_EMAIL} with the password " +
+                "\"${DemoConfig.SEED_PASSWORD}\", or register a new account."
+        } else {
+            "Live mode: accounts and alerts are stored in Firebase and shared " +
+                "between the patient's phone and the caregiver's device. Sign in " +
+                "with an account registered on this project, or create one."
+        },
         tone = BannerTone.Info,
         modifier = modifier.fillMaxWidth(),
     )
