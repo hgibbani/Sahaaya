@@ -5,6 +5,9 @@ import com.sahaaya.domain.model.CaregiverProfile
 import com.sahaaya.domain.model.DementiaStage
 import com.sahaaya.domain.model.EmergencyContact
 import com.sahaaya.domain.model.Gender
+import com.sahaaya.domain.model.GeoPoint
+import com.sahaaya.domain.model.PatientLocation
+import com.sahaaya.domain.model.SafeZoneStatus
 import com.sahaaya.domain.model.PatientProfile
 import com.sahaaya.domain.model.Role
 import com.sahaaya.domain.model.User
@@ -60,6 +63,7 @@ fun DocumentSnapshot.toPatientProfile(): PatientProfile? {
         dateOfBirth = getString(PatientFields.DATE_OF_BIRTH),
         gender = Gender.fromStorageKey(getString(PatientFields.GENDER)),
         bloodGroup = getString(PatientFields.BLOOD_GROUP),
+        height = getString(PatientFields.HEIGHT),
         address = getString(PatientFields.ADDRESS),
         diagnosisStage = DementiaStage.fromStorageKey(
             getString(PatientFields.DIAGNOSIS_STAGE),
@@ -77,6 +81,7 @@ fun PatientProfile.toMap(nowEpochMillis: Long): Map<String, Any?> = mapOf(
     PatientFields.DATE_OF_BIRTH to dateOfBirth,
     PatientFields.GENDER to gender.storageKey,
     PatientFields.BLOOD_GROUP to bloodGroup,
+    PatientFields.HEIGHT to height,
     PatientFields.ADDRESS to address,
     PatientFields.DIAGNOSIS_STAGE to diagnosisStage.storageKey,
     PatientFields.DIAGNOSED_ON to diagnosedOn,
@@ -130,4 +135,39 @@ fun EmergencyContact.toMap(): Map<String, Any?> = mapOf(
     EmergencyContactFields.RELATIONSHIP to relationship,
     EmergencyContactFields.PRIORITY to priority,
     EmergencyContactFields.IS_PRIMARY to isPrimary,
+)
+
+// --- patients/{uid} latest position -----------------------------------------
+
+/**
+ * Reads the location fields off the patient document.
+ *
+ * Returns null unless a real fix has been recorded: latitude, longitude and a
+ * timestamp must all be present. A half-written position is treated as no
+ * position rather than as coordinates near (0, 0) in the Gulf of Guinea.
+ */
+fun DocumentSnapshot.toPatientLocation(): PatientLocation? {
+    val latitude = getDouble(PatientFields.LAST_LATITUDE) ?: return null
+    val longitude = getDouble(PatientFields.LAST_LONGITUDE) ?: return null
+    val recordedAt = getLong(PatientFields.LAST_LOCATION_AT) ?: return null
+
+    return PatientLocation(
+        point = GeoPoint(
+            latitude = latitude,
+            longitude = longitude,
+            accuracyMetres = getDouble(PatientFields.LAST_ACCURACY)?.toFloat(),
+        ),
+        recordedAtEpochMillis = recordedAt,
+        status = SafeZoneStatus.fromStorageKey(getString(PatientFields.SAFE_ZONE_STATUS)),
+        metresFromBoundary = getLong(PatientFields.METRES_FROM_BOUNDARY)?.toInt(),
+    )
+}
+
+fun PatientLocation.toMap(): Map<String, Any?> = mapOf(
+    PatientFields.LAST_LATITUDE to point.latitude,
+    PatientFields.LAST_LONGITUDE to point.longitude,
+    PatientFields.LAST_ACCURACY to point.accuracyMetres?.toDouble(),
+    PatientFields.LAST_LOCATION_AT to recordedAtEpochMillis,
+    PatientFields.SAFE_ZONE_STATUS to status.storageKey,
+    PatientFields.METRES_FROM_BOUNDARY to metresFromBoundary?.toLong(),
 )

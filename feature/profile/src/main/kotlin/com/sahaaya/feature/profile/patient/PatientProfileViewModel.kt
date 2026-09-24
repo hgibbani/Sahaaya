@@ -27,6 +27,7 @@ data class PatientProfileUiState(
     val dateOfBirth: String = "",
     val gender: Gender = Gender.UNSPECIFIED,
     val bloodGroup: String = "",
+    val height: String = "",
     val address: String = "",
     val diagnosisStage: DementiaStage = DementiaStage.UNSPECIFIED,
     val diagnosedOn: String = "",
@@ -108,6 +109,7 @@ class PatientProfileViewModel @Inject constructor(
                             dateOfBirth = snapshot.profile?.dateOfBirth.orEmpty(),
                             gender = snapshot.profile?.gender ?: Gender.UNSPECIFIED,
                             bloodGroup = snapshot.profile?.bloodGroup.orEmpty(),
+                            height = snapshot.profile?.height.orEmpty(),
                             address = snapshot.profile?.address.orEmpty(),
                             diagnosisStage = snapshot.profile?.diagnosisStage
                                 ?: DementiaStage.UNSPECIFIED,
@@ -135,6 +137,8 @@ class PatientProfileViewModel @Inject constructor(
     fun onGenderChange(value: Gender) = edit(null) { it.copy(gender = value) }
 
     fun onBloodGroupChange(value: String) = edit(null) { it.copy(bloodGroup = value) }
+
+    fun onHeightChange(value: String) = edit(null) { it.copy(height = value) }
 
     fun onAddressChange(value: String) = edit(null) { it.copy(address = value) }
 
@@ -171,6 +175,7 @@ class PatientProfileViewModel @Inject constructor(
                         dateOfBirth = state.dateOfBirth.ifBlank { null },
                         gender = state.gender,
                         bloodGroup = state.bloodGroup.ifBlank { null },
+                        height = state.height.ifBlank { null },
                         address = state.address.ifBlank { null },
                         diagnosisStage = state.diagnosisStage,
                         diagnosedOn = state.diagnosedOn.ifBlank { null },

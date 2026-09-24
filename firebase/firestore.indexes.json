@@ -3,11 +3,19 @@
     "Composite indexes Firestore cannot infer. Deploy with:",
     "  firebase deploy --only firestore:indexes",
     "Without these, the caregiver timeline and the missed-dose sweep fail at",
-    "runtime with FAILED_PRECONDITION rather than at build time."
+    "runtime with FAILED_PRECONDITION rather than at build time.",
+    "",
+    "Per-index comments are deliberately absent: the Firebase CLI validates",
+    "each index object against a fixed schema and rejects unknown keys, so a",
+    "'_comment' inside one of the entries below fails the whole deploy.",
+    "",
+    "The caregiver timeline (patientId 'in' [...] ordered by occurredAt) is",
+    "served by the first events index. An 'in' filter is a set of equality",
+    "matches, so it uses the same ASCENDING index an equality filter would -",
+    "it does not need, and cannot use, an array-contains index."
   ],
   "indexes": [
     {
-      "_comment": "Patient's own event history, newest first.",
       "collectionGroup": "events",
       "queryScope": "COLLECTION",
       "fields": [
@@ -16,16 +24,6 @@
       ]
     },
     {
-      "_comment": "Caregiver timeline across several patients (whereIn + orderBy).",
-      "collectionGroup": "events",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "patientId", "arrayConfig": "CONTAINS" },
-        { "fieldPath": "occurredAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "_comment": "Active medicines for a patient.",
       "collectionGroup": "medications",
       "queryScope": "COLLECTION",
       "fields": [
@@ -34,7 +32,6 @@
       ]
     },
     {
-      "_comment": "Recent dose history, newest first.",
       "collectionGroup": "doses",
       "queryScope": "COLLECTION",
       "fields": [
@@ -43,7 +40,6 @@
       ]
     },
     {
-      "_comment": "Pending doses, and the overdue sweep that reads them.",
       "collectionGroup": "doses",
       "queryScope": "COLLECTION",
       "fields": [

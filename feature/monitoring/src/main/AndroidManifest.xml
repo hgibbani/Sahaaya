@@ -1,7 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      Android 14+ requires a permission matching each declared foreground
+      service type. The service samples location for the safe zone, so it
+      declares `location` alongside `health`.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <!-- Lets the "Are you okay?" prompt open over the lock screen after a
+         possible fall. Without it the prompt still arrives as a heads-up
+         notification with I'm okay / Need help buttons. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
     <application>
+        <activity
+            android:name=".fall.FallCheckActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true" />
+
+        <receiver
+            android:name=".fall.FallResponseReceiver"
+            android:exported="false" />
+
         <!--
           Fall detection needs continuous accelerometer access, which Android
           only grants to a foreground service. FOREGROUND_SERVICE_TYPE_HEALTH is
@@ -10,20 +34,7 @@
         <service
             android:name=".service.MonitoringService"
             android:exported="false"
-            android:foregroundServiceType="health" />
-
-        <!--
-          The fall countdown is its own activity so it can appear over the lock
-          screen. A patient on the floor cannot unlock the phone and navigate to
-          a cancel button.
-        -->
-        <activity
-            android:name=".service.FallConfirmationActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:launchMode="singleTask"
-            android:showOnLockScreen="true"
-            android:turnScreenOn="true" />
+            android:foregroundServiceType="health|location" />
 
         <receiver
             android:name=".service.BootReceiver"

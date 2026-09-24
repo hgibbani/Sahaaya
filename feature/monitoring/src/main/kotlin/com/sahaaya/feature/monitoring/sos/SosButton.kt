@@ -13,6 +13,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CrisisAlert
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -97,6 +102,13 @@ fun SosButton(
         verticalArrangement = Arrangement.spacedBy(Dimens.SpaceSm),
     ) {
         Box(contentAlignment = Alignment.Center) {
+            if (!pressed && enabled) {
+                Box(
+                    modifier = Modifier
+                        .size(BUTTON_SIZE_DP.dp + HALO_DP.dp)
+                        .background(color = SosHalo, shape = CircleShape),
+                )
+            }
             if (pressed) {
                 CircularProgressIndicator(
                     progress = { progress },
@@ -112,7 +124,7 @@ fun SosButton(
                     .size(BUTTON_SIZE_DP.dp)
                     .background(
                         color = if (enabled) {
-                            MaterialTheme.colorScheme.error
+                            SosRed
                         } else {
                             MaterialTheme.colorScheme.outline
                         },
@@ -155,12 +167,20 @@ fun SosButton(
                         color = MaterialTheme.colorScheme.onError,
                     )
 
-                    else -> Text(
-                        text = "SOS",
-                        fontSize = 40.sp,
-                        style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.onError,
-                    )
+                    else -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Filled.CrisisAlert,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(48.dp),
+                        )
+                        Text(
+                            text = "SOS",
+                            fontSize = 52.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                        )
+                    }
                 }
             }
         }
@@ -169,16 +189,22 @@ fun SosButton(
             text = when {
                 isSending -> "Sending your alert…"
                 pressed -> "Keep holding…"
-                else -> "Press and hold for 3 seconds to call for help"
+                else -> "Press 3 seconds to call for help"
             },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
         )
     }
 }
 
-private const val BUTTON_SIZE_DP = 180
+private const val BUTTON_SIZE_DP = 200
+private const val HALO_DP = 40
+
+/** Warm coral red from the reference design. */
+private val SosRed = Color(0xFFF25C5C)
+private val SosHalo = Color(0xFFFDE2E2)
 private const val HOLD_DURATION_MILLIS = 3_000L
 private const val TICK_MILLIS = 50L
 

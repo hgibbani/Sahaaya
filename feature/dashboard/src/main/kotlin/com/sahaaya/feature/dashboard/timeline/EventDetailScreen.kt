@@ -35,6 +35,14 @@ import com.sahaaya.domain.model.EventStatus
 import com.sahaaya.domain.model.EventType
 import com.sahaaya.domain.model.GeoPoint
 import com.sahaaya.domain.model.HealthEvent
+import com.sahaaya.domain.usecase.monitoring.ReportFallUseCase
+
+/**
+ * Detail keys written for machines - queries, exports, later analysis - rather
+ * than for the caregiver reading this screen. They stay in Firestore; they are
+ * simply not rendered.
+ */
+private val MACHINE_READABLE_DETAIL_KEYS = setOf(ReportFallUseCase.CONFIRMATION_KEY)
 
 @Composable
 fun EventDetailScreen(
@@ -121,9 +129,14 @@ private fun EventDetailContent(
         SahaayaCard {
             DetailRow(label = "Patient", value = event.patientName.ifBlank { "Unknown" })
             DetailRow(label = "When", value = formatAbsoluteTime(event.occurredAtEpochMillis))
-            event.details.forEach { (label, value) ->
-                DetailRow(label = label, value = value)
-            }
+            // Some detail keys exist so the event can be queried, not read. The
+            // human-readable "Status" row says the same thing in words, so
+            // showing the raw key as well only makes the screen look unfinished.
+            event.details
+                .filterKeys { it !in MACHINE_READABLE_DETAIL_KEYS }
+                .forEach { (label, value) ->
+                    DetailRow(label = label, value = value)
+                }
         }
 
         // Location is the single most actionable thing on this screen for a

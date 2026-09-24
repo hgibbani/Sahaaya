@@ -5,10 +5,12 @@ import com.sahaaya.core.result.Outcome
 import com.sahaaya.data.mapper.toCaregiverProfile
 import com.sahaaya.data.mapper.toEmergencyContact
 import com.sahaaya.data.mapper.toMap
+import com.sahaaya.data.mapper.toPatientLocation
 import com.sahaaya.data.mapper.toPatientProfile
 import com.sahaaya.data.mapper.toUser
 import com.sahaaya.domain.model.CaregiverProfile
 import com.sahaaya.domain.model.EmergencyContact
+import com.sahaaya.domain.model.PatientLocation
 import com.sahaaya.domain.model.PatientProfile
 import com.sahaaya.domain.model.User
 import com.sahaaya.domain.repository.ProfileRepository
@@ -72,6 +74,29 @@ class ProfileRepositoryImpl @Inject constructor(
             id = profile.uid,
             data = profile.toMap(System.currentTimeMillis()),
         )
+
+    // --- Latest position ---------------------------------------------------
+
+    override fun observePatientLocation(patientId: String): Flow<PatientLocation?> =
+        firestoreDataSource.observeDocument(FirestoreCollections.PATIENTS, patientId)
+            .map { snapshot -> snapshot?.toPatientLocation() }
+
+    /**
+     * A merge write of six fields, not a document replace.
+     *
+     * `setDocument(merge = true)` rather than `update()` because the patient
+     * document exists from registration but has never held these keys, and
+     * `update()` on a missing field path fails rather than creating it.
+     */
+    override suspend fun updatePatientLocation(
+        patientId: String,
+        location: PatientLocation,
+    ): Outcome<Unit> = firestoreDataSource.setDocument(
+        collection = FirestoreCollections.PATIENTS,
+        id = patientId,
+        data = location.toMap(),
+        merge = true,
+    )
 
     // --- Caregiver ---------------------------------------------------------
 

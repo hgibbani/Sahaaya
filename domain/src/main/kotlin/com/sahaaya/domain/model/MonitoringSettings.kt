@@ -1,5 +1,7 @@
 package com.sahaaya.domain.model
 
+import com.sahaaya.core.demo.FeatureScope
+
 /**
  * Everything about how closely this patient is watched.
  *
@@ -13,9 +15,14 @@ package com.sahaaya.domain.model
  */
 data class MonitoringSettings(
     val patientId: String,
-    val fallDetectionEnabled: Boolean = true,
+    /**
+     * Defaults follow [FeatureScope], so a newly registered patient is not
+     * silently opted into a detector this build does not run. See
+     * [FeatureScope.FALL_DETECTION_ACTIVE].
+     */
+    val fallDetectionEnabled: Boolean = FeatureScope.FALL_DETECTION_ACTIVE,
     val fallSensitivity: FallSensitivity = FallSensitivity.BALANCED,
-    val inactivityDetectionEnabled: Boolean = true,
+    val inactivityDetectionEnabled: Boolean = FeatureScope.INACTIVITY_DETECTION_ACTIVE,
     val inactivityTimeoutMinutes: Int = DEFAULT_INACTIVITY_MINUTES,
     val geofenceEnabled: Boolean = false,
     val safeZone: SafeZone? = null,
@@ -41,12 +48,14 @@ data class MonitoringSettings(
         /**
          * How long the patient has to cancel before an alert is sent.
          *
-         * Long enough for someone who has just stumbled to reach the phone and
-         * say they are fine; short enough that a real fall is not sitting
-         * unreported. Five seconds is the figure the fall-detection literature
-         * converges on and it is what the project brief specifies.
+         * Thirty seconds: an older person who has just gone down needs time to
+         * find the phone, read the screen and press a large button. Five seconds
+         * - common in research prototypes - would report most stumbles before a
+         * patient could answer. Nothing is sent while the prompt is open, so
+         * the only cost of a longer window is a later alert for a patient who
+         * cannot respond.
          */
-        const val FALL_CONFIRMATION_SECONDS = 5
+        const val FALL_CONFIRMATION_SECONDS = 30
     }
 }
 

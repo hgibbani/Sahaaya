@@ -36,6 +36,29 @@ const UPDATES_CHANNEL = "sahaaya_updates";
 const CRITICAL_TYPES = new Set(["fall", "sos", "geofence_exit"]);
 
 /**
+ * Mirrors HealthEvent.usesEmergencyAlarm: only an explicit SOS may use the
+ * alarm channel. Falls and safe-zone exits are still urgent (high priority,
+ * no TTL) but arrive as ordinary notifications rather than an alarm.
+ */
+const ALARM_TYPES = new Set(["sos"]);
+
+/** Mirrors AlertChannel.SAFETY: urgent, but the ordinary notification sound. */
+const SAFETY_TYPES = new Set(["fall", "geofence_exit"]);
+const SAFETY_CHANNEL = "sahaaya_safety";
+
+function categoryFor(type) {
+  if (ALARM_TYPES.has(type)) return "emergency";
+  if (SAFETY_TYPES.has(type)) return "safety";
+  return "update";
+}
+
+function channelFor(type) {
+  if (ALARM_TYPES.has(type)) return EMERGENCY_CHANNEL;
+  if (SAFETY_TYPES.has(type)) return SAFETY_CHANNEL;
+  return UPDATES_CHANNEL;
+}
+
+/**
  * Fans an event out to the patient's caregivers.
  *
  * Fires on create only. Updates are status changes - an acknowledgement or a
@@ -119,14 +142,14 @@ exports.onEventCreated = onDocumentCreated("events/{eventId}", async (event) => 
       eventId,
       patientId,
       type: String(data.type || ""),
-      category: isCritical ? "emergency" : "update",
+      category: categoryFor(data.type),
       title,
       body,
     },
     android: {
       priority: "high",
       notification: {
-        channelId: isCritical ? EMERGENCY_CHANNEL : UPDATES_CHANNEL,
+        channelId: channelFor(data.type),
         // Collapse repeats of the same event, never across different events -
         // two separate falls must produce two notifications.
         tag: eventId,

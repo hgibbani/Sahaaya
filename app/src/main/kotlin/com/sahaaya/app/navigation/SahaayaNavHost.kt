@@ -7,7 +7,6 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.sahaaya.app.BuildConfig
 import com.sahaaya.app.SessionState
 import com.sahaaya.common.components.LoadingState
 import com.sahaaya.domain.model.Role
@@ -95,13 +94,15 @@ fun SahaayaNavHost(
                 navController.navigate(MedicationRoutes.ownMedications())
             },
             onOpenSettings = { navController.navigate(MonitoringRoutes.SETTINGS) },
-            // Null in a release build, so the card is never composed and the
-            // route below is never registered.
-            onOpenDemoMode = if (BuildConfig.DEBUG) {
-                { navController.navigate(MonitoringRoutes.DEMO) }
-            } else {
-                null
+            onOpenReminders = { navController.navigate(MedicationRoutes.ownReminders()) },
+            onOpenTrackingStatus = {
+                navController.navigate(MonitoringRoutes.TRACKING_STATUS)
             },
+            // Always null: the developer "Demo mode" screen has been removed.
+            // The patient dashboard already omits the card entirely when this
+            // is null, so the entry point disappears without that screen
+            // needing to know why.
+            onOpenDemoMode = null,
         )
 
         caregiverDashboard(
@@ -117,6 +118,15 @@ fun SahaayaNavHost(
             onOpenEvent = { eventId ->
                 navController.navigate(DashboardRoutes.eventDetail(eventId))
             },
+            onOpenSafeZone = { patientId ->
+                navController.navigate(MonitoringRoutes.safeZone(patientId))
+            },
+            onOpenLiveTracking = { patientId, patientName ->
+                navController.navigate(MonitoringRoutes.liveTracking(patientId, patientName))
+            },
+            onOpenPatientReminders = { patientId ->
+                navController.navigate(MedicationRoutes.patientReminders(patientId))
+            },
         )
 
         timelineScreens(
@@ -128,14 +138,26 @@ fun SahaayaNavHost(
 
         profileScreens(onNavigateBack = back)
 
-        medicationScreens(onNavigateBack = back)
+        medicationScreens(
+            onNavigateBack = back,
+            // "Medicine" inside Reminders opens the existing medicines screen
+            // for the same patient: SELF for the patient, the id for a caregiver.
+            onOpenMedicines = { patientId ->
+                navController.navigate(
+                    if (patientId == MedicationRoutes.SELF) {
+                        MedicationRoutes.ownMedications()
+                    } else {
+                        MedicationRoutes.patientMedications(patientId)
+                    },
+                )
+            },
+        )
 
         monitoringScreens(
             onNavigateBack = back,
-            onOpenFallCountdown = { eventId ->
-                navController.navigate(MonitoringRoutes.fallCountdown(eventId))
+            onSetSafeZone = { patientId ->
+                navController.navigate(MonitoringRoutes.safeZone(patientId))
             },
-            includeDemoMode = BuildConfig.DEBUG,
         )
 
         pairingScreens(

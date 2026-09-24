@@ -31,15 +31,15 @@ class MainActivity : ComponentActivity() {
 
     private val sessionViewModel: SessionViewModel by viewModels()
 
-    private val requestNotificationPermission = registerForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { /* Declining is respected; alerts still appear inside the app. */ }
+    private val requestPermissions = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { /* Declining is respected; the app degrades rather than failing. */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        ensureNotificationPermission()
+        ensureMonitoringPermissions()
 
         setContent {
             SahaayaTheme {
@@ -55,16 +55,40 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun ensureNotificationPermission() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    /**
+     * Asks for everything the monitoring pipeline needs, in one prompt, on launch.
+     *
+     * ACTIVITY_RECOGNITION is not optional decoration. From Android 14 a
+     * foreground service declaring `foregroundServiceType="health"` - which is
+     * what the fall detector runs as - may only start if the app holds one of
+     * the health-related permissions at runtime. Without it `startForeground`
+     * throws and fall detection never starts at all, which is a silent failure
+     * of the app's single most important feature.
+     *
+     * Location is requested here too so that an alert carries coordinates.
+     * Background location is deliberately *not* requested at launch: Android
+     * refuses it unless foreground location is already granted, so the
+     * monitoring settings screen asks for it separately when a safe zone is set.
+     */
+    private fun ensureMonitoringPermissions() {
+        val wanted = buildList {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                add(Manifest.permission.ACTIVITY_RECOGNITION)
+            }
+            add(Manifest.permission.ACCESS_FINE_LOCATION)
+            add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
 
-        val granted = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.POST_NOTIFICATIONS,
-        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val missing = wanted.filter { permission ->
+            ContextCompat.checkSelfPermission(this, permission) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
 
-        if (!granted) {
-            requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        if (missing.isNotEmpty()) {
+            requestPermissions.launch(missing.toTypedArray())
         }
     }
 }

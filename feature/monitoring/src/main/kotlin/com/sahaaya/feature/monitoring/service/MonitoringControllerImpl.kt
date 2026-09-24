@@ -36,8 +36,15 @@ class MonitoringControllerImpl @Inject constructor(
     override suspend fun applySettings(settings: MonitoringSettings): Outcome<Unit> {
         val problems = mutableListOf<String>()
 
-        // --- Fall detection: the foreground service ---
-        if (settings.fallDetectionEnabled) {
+        // --- The foreground service ---
+        //
+        // It now hosts two things: fall detection (off in this build) and
+        // safe-zone tracking. Either being enabled is reason to run it, and
+        // neither means stop.
+        val needsService = settings.fallDetectionEnabled ||
+            (settings.geofenceEnabled && settings.safeZone != null)
+
+        if (needsService) {
             MonitoringService.start(context)
             running = true
         } else {
@@ -46,15 +53,23 @@ class MonitoringControllerImpl @Inject constructor(
         }
 
         // --- Safe zone ---
-        val zone = settings.safeZone
-        if (settings.geofenceEnabled && zone != null) {
-            when (val result = geofenceManager.register(zone)) {
-                is Outcome.Success -> Unit
-                is Outcome.Failure -> problems += result.error.message
-            }
-        } else {
-            geofenceManager.unregister()
-        }
+        //
+        // The platform Geofencing API is deliberately NOT registered.
+        //
+        // It would be a second, competing source of exit events: the service
+        // already samples location and decides inside/outside itself, so having
+        // the OS also fire GEOFENCE_TRANSITION_EXIT into
+        // GeofenceBroadcastReceiver would report the same crossing twice and
+        // wake the caregiver twice.
+        //
+        // Sampling in the service is also what makes the caregiver's card
+        // possible at all - the OS geofence reports crossings but never
+        // "currently 82 m inside", and it needs ACCESS_BACKGROUND_LOCATION,
+        // which a foreground service with the `location` type does not.
+        //
+        // GeofenceManager stays in the tree for the moment that trade-off is
+        // revisited; it is simply not the authority today.
+        geofenceManager.unregister()
 
         // --- Inactivity ---
         if (settings.inactivityDetectionEnabled) {

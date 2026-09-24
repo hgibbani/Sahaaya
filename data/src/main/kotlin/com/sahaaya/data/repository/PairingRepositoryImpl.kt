@@ -58,10 +58,11 @@ class PairingRepositoryImpl @Inject constructor(
             FirestoreCollections.USERS,
             patientId,
         )
-        val patientName = when (userResult) {
+        val patient = when (userResult) {
             is Outcome.Failure -> return userResult
-            is Outcome.Success -> userResult.data?.toUser()?.displayName.orEmpty()
+            is Outcome.Success -> userResult.data?.toUser()
         }
+        val patientName = patient?.displayName.orEmpty()
 
         val cleared = firestoreDataSource.deleteUnredeemedCodesFor(patientId)
         if (cleared is Outcome.Failure) return cleared
@@ -71,6 +72,9 @@ class PairingRepositoryImpl @Inject constructor(
             code = generateCode(),
             patientId = patientId,
             patientName = patientName,
+            // Travels with the code so the caregiver can copy it onto the
+            // pairing, giving each side a number to call the other on.
+            patientPhone = patient?.phoneNumber.orEmpty(),
             createdAtEpochMillis = now,
             expiresAtEpochMillis = now + PairingCode.VALIDITY_MILLIS,
         )
@@ -96,10 +100,11 @@ class PairingRepositoryImpl @Inject constructor(
             FirestoreCollections.USERS,
             caregiverId,
         )
-        val caregiverName = when (caregiverResult) {
+        val caregiver = when (caregiverResult) {
             is Outcome.Failure -> return caregiverResult
-            is Outcome.Success -> caregiverResult.data?.toUser()?.displayName.orEmpty()
+            is Outcome.Success -> caregiverResult.data?.toUser()
         }
+        val caregiverName = caregiver?.displayName.orEmpty()
 
         val now = System.currentTimeMillis()
         var built: Pairing? = null
@@ -108,13 +113,15 @@ class PairingRepositoryImpl @Inject constructor(
             code = code,
             caregiverId = caregiverId,
             caregiverName = caregiverName,
-            buildPairing = { patientId, patientName ->
+            buildPairing = { patientId, patientName, patientPhone ->
                 val pairing = Pairing(
                     id = Pairing.idFor(patientId, caregiverId),
                     patientId = patientId,
                     caregiverId = caregiverId,
                     patientName = patientName,
                     caregiverName = caregiverName,
+                    patientPhone = patientPhone,
+                    caregiverPhone = caregiver?.phoneNumber.orEmpty(),
                     status = PairingStatus.ACTIVE,
                     createdAtEpochMillis = now,
                 )

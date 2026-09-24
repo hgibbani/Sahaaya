@@ -6,6 +6,7 @@ import com.sahaaya.core.validation.Validators
 import com.sahaaya.domain.model.CaregiverProfile
 import com.sahaaya.domain.model.PatientProfile
 import com.sahaaya.domain.model.User
+import com.sahaaya.domain.model.PatientLocation
 import com.sahaaya.domain.repository.ProfileRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -156,4 +157,17 @@ class SaveCaregiverProfileUseCase @Inject constructor(
         const val FIELD_PHONE = "phoneNumber"
         const val FIELD_RELATIONSHIP = "relationship"
     }
+}
+
+/**
+ * The patient's most recent position, for the caregiver's dashboard card.
+ *
+ * Emits null until a fix has been recorded, which the card renders as
+ * "Waiting for the patient's phone" rather than as a location at (0, 0).
+ */
+class ObservePatientLocationUseCase @Inject constructor(
+    private val profileRepository: ProfileRepository,
+) {
+    operator fun invoke(patientId: String): Flow<PatientLocation?> =
+        profileRepository.observePatientLocation(patientId)
 }

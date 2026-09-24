@@ -10,6 +10,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import android.content.pm.ApplicationInfo
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -28,6 +31,7 @@ import com.sahaaya.common.components.SahaayaScreen
 import com.sahaaya.common.components.SecondaryButton
 import com.sahaaya.common.theme.Dimens
 import com.sahaaya.common.theme.SahaayaTheme
+import com.sahaaya.core.demo.FeatureScope
 import com.sahaaya.domain.model.FallSensitivity
 import com.sahaaya.domain.model.MonitoringSettings
 import com.sahaaya.domain.model.SafeZone
@@ -54,6 +58,7 @@ fun MonitoringSettingsScreen(
         onRemindersEnabled = viewModel::setMedicationRemindersEnabled,
         onMissedDoseGrace = viewModel::setMissedDoseGrace,
         onSave = viewModel::save,
+        onSimulateFall = viewModel::simulateFall,
         modifier = modifier,
     )
 }
@@ -72,6 +77,7 @@ private fun MonitoringSettingsContent(
     onRemindersEnabled: (Boolean) -> Unit,
     onMissedDoseGrace: (Int) -> Unit,
     onSave: () -> Unit,
+    onSimulateFall: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val settings = state.settings
@@ -94,6 +100,10 @@ private fun MonitoringSettingsContent(
         }
 
         // --- Fall detection ---
+        // Hidden while the detector is switched off. Offering a toggle and a
+        // sensitivity picker for something that cannot run would be the screen
+        // telling the patient a lie about what their phone is doing.
+        if (FeatureScope.FALL_DETECTION_ACTIVE) {
         SahaayaCard {
             SettingToggle(
                 title = "Fall detection",
@@ -127,6 +137,7 @@ private fun MonitoringSettingsContent(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
         }
 
         // --- Safe zone ---
@@ -189,6 +200,8 @@ private fun MonitoringSettingsContent(
         }
 
         // --- Inactivity ---
+        // Hidden for the same reason as fall detection above.
+        if (FeatureScope.INACTIVITY_DETECTION_ACTIVE) {
         SahaayaCard {
             SettingToggle(
                 title = "Inactivity alerts",
@@ -216,6 +229,7 @@ private fun MonitoringSettingsContent(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
         }
 
         // --- Medication ---
@@ -247,6 +261,31 @@ private fun MonitoringSettingsContent(
             onClick = onSave,
             loading = state.isSaving,
         )
+
+        // --- Developer / testing ---
+        // Only in debuggable builds, so it cannot appear in a release. Kept at
+        // the very bottom of Settings, never on the patient dashboard.
+        val context = LocalContext.current
+        val debuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (debuggable && FeatureScope.FALL_DETECTION_ACTIVE) {
+            SahaayaCard {
+                Text(
+                    text = "DEVELOPER TEST ONLY",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Text(
+                    text = "Runs the real fall pipeline from the confirmation step " +
+                        "onwards, without dropping the phone. The event is marked " +
+                        "[TEST] for the caregiver.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(onClick = onSimulateFall, modifier = Modifier.fillMaxWidth()) {
+                    Text("Simulate Fall Event")
+                }
+            }
+        }
     }
 }
 

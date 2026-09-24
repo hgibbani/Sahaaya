@@ -59,8 +59,9 @@ class SahaayaMessagingService : FirebaseMessagingService() {
             ?: message.data[DATA_BODY]
             .orEmpty()
 
-        val isEmergency = message.data[DATA_CATEGORY] == CATEGORY_EMERGENCY
-        showNotification(this, title, body, isEmergency)
+        val category = message.data[DATA_CATEGORY]
+        val isEmergency = category == CATEGORY_EMERGENCY
+        showNotification(this, title, body, isEmergency, isSafety = category == CATEGORY_SAFETY)
     }
 
     private fun showNotification(
@@ -68,6 +69,7 @@ class SahaayaMessagingService : FirebaseMessagingService() {
         title: String,
         body: String,
         isEmergency: Boolean,
+        isSafety: Boolean = false,
     ) {
         val granted = ContextCompat.checkSelfPermission(
             context,
@@ -88,10 +90,10 @@ class SahaayaMessagingService : FirebaseMessagingService() {
             )
         }
 
-        val channelId = if (isEmergency) {
-            SahaayaNotificationChannels.EMERGENCY_CHANNEL_ID
-        } else {
-            SahaayaNotificationChannels.UPDATES_CHANNEL_ID
+        val channelId = when {
+            isEmergency -> SahaayaNotificationChannels.EMERGENCY_CHANNEL_ID
+            isSafety -> SahaayaNotificationChannels.SAFETY_CHANNEL_ID
+            else -> SahaayaNotificationChannels.UPDATES_CHANNEL_ID
         }
 
         val notification = NotificationCompat.Builder(context, channelId)
@@ -120,5 +122,6 @@ class SahaayaMessagingService : FirebaseMessagingService() {
         const val DATA_BODY = "body"
         const val DATA_CATEGORY = "category"
         const val CATEGORY_EMERGENCY = "emergency"
+        const val CATEGORY_SAFETY = "safety"
     }
 }

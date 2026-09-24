@@ -3,6 +3,7 @@ package com.sahaaya.domain.repository
 import com.sahaaya.core.result.Outcome
 import com.sahaaya.domain.model.CaregiverProfile
 import com.sahaaya.domain.model.EmergencyContact
+import com.sahaaya.domain.model.PatientLocation
 import com.sahaaya.domain.model.PatientProfile
 import com.sahaaya.domain.model.User
 import kotlinx.coroutines.flow.Flow
@@ -33,6 +34,20 @@ interface ProfileRepository {
     suspend fun getPatientProfile(uid: String): Outcome<PatientProfile>
 
     suspend fun savePatientProfile(profile: PatientProfile): Outcome<Unit>
+
+    // --- Latest position ---------------------------------------------------
+
+    /** The patient's most recent fix, or null before one has been recorded. */
+    fun observePatientLocation(patientId: String): Flow<PatientLocation?>
+
+    /**
+     * Records a new fix. A targeted merge of the location fields only, so it can
+     * never overwrite clinical detail written by the profile screen.
+     */
+    suspend fun updatePatientLocation(
+        patientId: String,
+        location: PatientLocation,
+    ): Outcome<Unit>
 
     // --- Caregiver ---------------------------------------------------------
 
