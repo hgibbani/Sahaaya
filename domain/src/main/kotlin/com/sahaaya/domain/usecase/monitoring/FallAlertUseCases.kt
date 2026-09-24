@@ -9,21 +9,19 @@ import javax.inject.Inject
 import kotlin.math.roundToInt
 
 /**
- * Turns a detected fall into an alert, after the patient has had a chance to
- * cancel it.
+ * Records a possible fall once the patient has answered - or failed to answer -
+ * the "Are you okay?" prompt.
  *
- * The order matters and is the opposite of what looks natural. The event is
- * written to Firestore **first**, then the countdown runs, then the event is
- * cancelled if the patient says they are fine.
+ * Nothing is written while the prompt is open: a patient who taps "I'm okay"
+ * produces no event and no notification at all. This trades away one thing,
+ * stated plainly: if the phone is destroyed during the response window, the
+ * fall is not reported. The alternative - write first, cancel later - was
+ * rejected because it notified caregivers of falls the patient had already
+ * dismissed.
  *
- * Writing first means a phone that dies on impact, or is thrown out of reach,
- * has already reported the fall. The alternative - wait five seconds, then
- * write - loses exactly the falls that matter most, because the hardest falls
- * are the ones where nobody reaches the phone afterwards.
- *
- * The cost is that a cancelled fall leaves a CANCELLED document behind. That is
- * a feature: a pattern of cancelled falls means the sensitivity is wrong, or
- * that the person is stumbling often without injury, and both are worth seeing.
+ * Uses the existing event pipeline, so the fall lands on the same timeline, with
+ * the same security rules, as every other alert. [RaiseEventUseCase] attaches a
+ * fresh GPS fix taken now, at the moment of reporting.
  */
 class ReportFallUseCase @Inject constructor(
     private val raiseEvent: RaiseEventUseCase,
@@ -35,6 +33,9 @@ class ReportFallUseCase @Inject constructor(
         /** Degrees of orientation change across the impact. */
         val orientationChangeDegrees: Float,
         val detectedAtEpochMillis: Long = System.currentTimeMillis(),
+        val confirmation: FallConfirmation = FallConfirmation.NO_RESPONSE,
+        /** Developer test path. Labelled on the event so nobody mistakes it. */
+        val simulated: Boolean = false,
     )
 
     suspend operator fun invoke(params: Params): Outcome<HealthEvent> {
@@ -42,18 +43,29 @@ class ReportFallUseCase @Inject constructor(
         return raiseEvent(
             RaiseEventUseCase.Params(
                 type = EventType.FALL,
-                summary = "Possible fall detected",
-                details = mapOf(
-                    "Impact force" to "${(gForce * 10).roundToInt() / 10.0} g",
-                    "Orientation change" to "${params.orientationChangeDegrees.roundToInt()}°",
-                ),
+                summary = buildString {
+                    if (params.simulated) append("[TEST] ")
+                    append("Possible fall detected - ")
+                    append(params.confirmation.displayName.lowercase())
+                },
+                details = buildMap {
+                    put("Status", params.confirmation.displayName)
+                    put(CONFIRMATION_KEY, params.confirmation.storageKey)
+                    put("Impact force", "${(gForce * 10).roundToInt() / 10.0} g")
+                    put("Orientation change", "${params.orientationChangeDegrees.roundToInt()}°")
+                    put("Location", "Taken when the alert was sent")
+                    if (params.simulated) put("Source", "Simulated test event")
+                },
                 occurredAtEpochMillis = params.detectedAtEpochMillis,
             ),
         )
     }
 
-    private companion object {
-        const val EARTH_GRAVITY = 9.81f
+    companion object {
+        private const val EARTH_GRAVITY = 9.81f
+
+        /** Machine-readable confirmation status, stored in the event details. */
+        const val CONFIRMATION_KEY = "confirmationStatus"
     }
 }
 

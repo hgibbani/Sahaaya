@@ -16,8 +16,19 @@ import android.media.RingtoneManager
  */
 object SahaayaNotificationChannels {
 
-    /** Falls, geofence breaches, prolonged inactivity. Phase 3 publishes to this. */
+    /**
+     * Explicit patient SOS only. Alarm sound, bypasses Do Not Disturb. Nothing
+     * automatic may post here - see HealthEvent.alertChannel.
+     */
     const val EMERGENCY_CHANNEL_ID = "sahaaya_emergency"
+
+    /**
+     * Automatic safety detections: a possible fall, leaving the safe zone.
+     * High priority and heads-up, but the ordinary notification sound - no alarm
+     * tone, no Do Not Disturb bypass, no repeating ring. These are sensor
+     * inferences, not a person asking for help.
+     */
+    const val SAFETY_CHANNEL_ID = "sahaaya_safety"
 
     /** Pairing activity, profile changes - things that can wait. */
     const val UPDATES_CHANNEL_ID = "sahaaya_updates"
@@ -54,6 +65,17 @@ object SahaayaNotificationChannels {
             )
         }
 
+        val safety = NotificationChannel(
+            SAFETY_CHANNEL_ID,
+            "Safety alerts",
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = "Possible falls and leaving the safe zone."
+            enableVibration(true)
+            // Default notification sound - deliberately not TYPE_ALARM, and
+            // no setBypassDnd. Only SOS may do either.
+        }
+
         val updates = NotificationChannel(
             UPDATES_CHANNEL_ID,
             "Care updates",
@@ -83,6 +105,7 @@ object SahaayaNotificationChannels {
         }
 
         manager.createNotificationChannel(emergency)
+        manager.createNotificationChannel(safety)
         manager.createNotificationChannel(updates)
         manager.createNotificationChannel(reminders)
         manager.createNotificationChannel(monitoring)

@@ -29,7 +29,40 @@ data class HealthEvent(
     val isUnresolved: Boolean get() = status == EventStatus.NEW
 
     val isCritical: Boolean get() = type.severity == EventSeverity.CRITICAL
+
+    /**
+     * Whether this event may use the loud alarm channel (alarm-clock sound,
+     * bypasses Do Not Disturb).
+     *
+     * Only an explicit SOS. [isCritical] still marks falls and safe-zone exits
+     * as urgent for display - red cards, top of the timeline - but urgency and
+     * *alarm* are different things. An alarm that also fires for automatic
+     * detections gets tuned out, and the one time it matters is when the patient
+     * has deliberately pressed and held the button asking for help. Everything
+     * else arrives as an ordinary notification.
+     */
+    val usesEmergencyAlarm: Boolean get() = alertChannel == AlertChannel.ALARM
+
+    /** Which notification treatment this event gets. The single source of that rule. */
+    val alertChannel: AlertChannel
+        get() = when (type) {
+            EventType.SOS -> AlertChannel.ALARM
+            EventType.FALL, EventType.GEOFENCE_EXIT -> AlertChannel.SAFETY
+            else -> AlertChannel.UPDATE
+        }
 }
+
+/**
+ * How loudly an event is announced to a caregiver.
+ *
+ * - [ALARM]: alarm sound, bypasses Do Not Disturb. **Explicit SOS only** - the
+ *   patient deliberately asked for help.
+ * - [SAFETY]: high-priority notification with the ordinary notification sound.
+ *   Automatic detections (possible fall, leaving the safe zone): urgent, but a
+ *   sensor inference rather than a person pressing a button.
+ * - [UPDATE]: default notification, for everything routine.
+ */
+enum class AlertChannel { ALARM, SAFETY, UPDATE }
 
 /**
  * What kind of event this is.
@@ -44,7 +77,9 @@ enum class EventType(
     val displayName: String,
     val severity: EventSeverity,
 ) {
-    FALL("fall", "Fall detected", EventSeverity.CRITICAL),
+    // "Possible": a phone sensor cannot confirm a person fell, and the wording
+    // must not claim more than the detector knows.
+    FALL("fall", "Possible fall", EventSeverity.CRITICAL),
     SOS("sos", "Emergency SOS", EventSeverity.CRITICAL),
     GEOFENCE_EXIT("geofence_exit", "Left safe zone", EventSeverity.CRITICAL),
     INACTIVITY("inactivity", "No movement", EventSeverity.WARNING),

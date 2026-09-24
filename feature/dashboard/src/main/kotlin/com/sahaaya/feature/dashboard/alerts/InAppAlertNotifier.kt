@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.sahaaya.domain.model.AlertChannel
 import com.sahaaya.domain.model.HealthEvent
 import com.sahaaya.feature.dashboard.R
 import com.sahaaya.firebase.messaging.SahaayaNotificationChannels
@@ -57,10 +58,12 @@ class InAppAlertNotifier @Inject constructor(
 
                 val notification = NotificationCompat.Builder(
                     context,
-                    if (event.isCritical) {
-                        SahaayaNotificationChannels.EMERGENCY_CHANNEL_ID
-                    } else {
-                        SahaayaNotificationChannels.UPDATES_CHANNEL_ID
+                    // One rule for every event: HealthEvent.alertChannel. Only
+                    // an explicit SOS reaches the alarm channel.
+                    when (event.alertChannel) {
+                        AlertChannel.ALARM -> SahaayaNotificationChannels.EMERGENCY_CHANNEL_ID
+                        AlertChannel.SAFETY -> SahaayaNotificationChannels.SAFETY_CHANNEL_ID
+                        AlertChannel.UPDATE -> SahaayaNotificationChannels.UPDATES_CHANNEL_ID
                     },
                 )
                     .setSmallIcon(R.drawable.ic_alert)
@@ -73,17 +76,19 @@ class InAppAlertNotifier @Inject constructor(
                             .bigText(event.summary.ifBlank { event.type.displayName }),
                     )
                     .setPriority(
-                        if (event.isCritical) {
-                            NotificationCompat.PRIORITY_MAX
-                        } else {
-                            NotificationCompat.PRIORITY_DEFAULT
+                        when (event.alertChannel) {
+                            AlertChannel.ALARM -> NotificationCompat.PRIORITY_MAX
+                            AlertChannel.SAFETY -> NotificationCompat.PRIORITY_HIGH
+                            AlertChannel.UPDATE -> NotificationCompat.PRIORITY_DEFAULT
                         },
                     )
+                    // CATEGORY_ALARM is reserved for SOS: the system can treat
+                    // that category as an alarm, which a fall must never be.
                     .setCategory(
-                        if (event.isCritical) {
-                            NotificationCompat.CATEGORY_ALARM
-                        } else {
-                            NotificationCompat.CATEGORY_STATUS
+                        when (event.alertChannel) {
+                            AlertChannel.ALARM -> NotificationCompat.CATEGORY_ALARM
+                            AlertChannel.SAFETY -> NotificationCompat.CATEGORY_EVENT
+                            AlertChannel.UPDATE -> NotificationCompat.CATEGORY_STATUS
                         },
                     )
                     .setAutoCancel(true)

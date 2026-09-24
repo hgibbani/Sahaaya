@@ -76,6 +76,44 @@ class AcknowledgeEventUseCase @Inject constructor(
 }
 
 /**
+ * Acknowledges every outstanding alert at once.
+ *
+ * Clearing 61 alerts one tap at a time is not a workflow, and a caregiver who
+ * gives up halfway leaves a timeline that no longer means anything.
+ *
+ * This is the same [AcknowledgeEventUseCase] applied to a list, deliberately:
+ * "clear" already means "acknowledged by this caregiver, at this time", and a
+ * bulk action that deleted rows instead would destroy the record of what
+ * happened. Nothing is removed - the events keep their type, time, location and
+ * details, and stay visible in history. Only their status changes.
+ *
+ * Failures are collected rather than aborting the run. One rejected write should
+ * not leave the other sixty untouched, so the caller is told how many did not
+ * land and the rest still clear.
+ */
+class AcknowledgeAllEventsUseCase @Inject constructor(
+    private val authRepository: AuthRepository,
+    private val eventRepository: EventRepository,
+) {
+    /** @return how many failed to clear. Zero means all of them cleared. */
+    suspend operator fun invoke(eventIds: List<String>): Outcome<Int> {
+        val caregiverId = authRepository.currentUserId()
+            ?: return Outcome.Failure(AppError.NotAuthenticated())
+
+        var failures = 0
+        eventIds.forEach { eventId ->
+            val result = eventRepository.updateStatus(
+                eventId = eventId,
+                status = EventStatus.ACKNOWLEDGED,
+                caregiverId = caregiverId,
+            )
+            if (result is Outcome.Failure) failures++
+        }
+        return Outcome.Success(failures)
+    }
+}
+
+/**
  * The patient cancels an alert during the confirmation countdown.
  *
  * The event is marked cancelled rather than deleted. A pattern of cancelled

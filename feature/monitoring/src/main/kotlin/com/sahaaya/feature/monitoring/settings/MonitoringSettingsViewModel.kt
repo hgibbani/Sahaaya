@@ -11,6 +11,8 @@ import com.sahaaya.domain.repository.LocationRepository
 import com.sahaaya.domain.usecase.monitoring.ObserveMonitoringSettingsUseCase
 import com.sahaaya.domain.usecase.monitoring.SaveMonitoringSettingsUseCase
 import com.sahaaya.domain.usecase.monitoring.SetSafeZoneToCurrentLocationUseCase
+import com.sahaaya.feature.monitoring.fall.FallAlertCoordinator
+import com.sahaaya.sensor.fall.FallCandidate
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,6 +40,7 @@ class MonitoringSettingsViewModel @Inject constructor(
     private val observeSettings: ObserveMonitoringSettingsUseCase,
     private val saveSettings: SaveMonitoringSettingsUseCase,
     private val setSafeZoneToCurrentLocation: SetSafeZoneToCurrentLocationUseCase,
+    private val fallAlertCoordinator: FallAlertCoordinator,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MonitoringSettingsUiState())
@@ -181,5 +184,26 @@ class MonitoringSettingsViewModel @Inject constructor(
             val settings = state.settings ?: return@update state
             state.copy(settings = transform(settings), savedAtLeastOnce = false)
         }
+    }
+
+    /**
+     * DEVELOPMENT ONLY. Injects a possible fall straight after the sensor
+     * stage, so a demonstration does not require dropping a phone.
+     *
+     * Everything downstream is the real pipeline: the "Are you okay?" prompt,
+     * the response timer, the event write with the phone's real GPS fix, and the
+     * caregiver notification. The candidate is marked simulated and the event
+     * summary is prefixed [TEST], so it cannot be mistaken for a real fall.
+     */
+    fun simulateFall() {
+        fallAlertCoordinator.onPossibleFall(
+            FallCandidate(
+                impactMagnitude = 27.5f,
+                orientationChangeDegrees = 80f,
+                detectedAtEpochMillis = System.currentTimeMillis(),
+                hadFreeFall = true,
+                simulated = true,
+            ),
+        )
     }
 }
