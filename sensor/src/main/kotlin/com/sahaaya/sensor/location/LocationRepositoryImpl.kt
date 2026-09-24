@@ -4,34 +4,125 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Looper
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.CurrentLocationRequest
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.Granularity
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.Priority
 import com.sahaaya.core.result.AppError
 import com.sahaaya.core.result.Outcome
 import com.sahaaya.domain.model.GeoPoint
 import com.sahaaya.domain.repository.LocationRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * A single position, on demand.
+ * The one authoritative source of position in Sahaaya.
  *
- * Sahaaya never streams or stores a location trail. It asks where the patient is
- * at the moment an event is raised, attaches that one point, and stops. A
- * continuous trail would be a far more sensitive record than anything the app
- * needs, and it is the thing families object to most.
+ * Two modes, deliberately kept in the same class so no second location stack can
+ * grow beside it:
+ *
+ * - [currentLocation] - a single fix, on demand, attached to an event as it is
+ *   raised.
+ * - [locationUpdates] - a periodic stream, used only while safe-zone monitoring
+ *   is switched on.
+ *
+ * Even the stream is not a location trail: each fix replaces the last one on
+ * `patients/{uid}`, and no history is kept. A stored trail would be far more
+ * sensitive than anything this app needs, and it is the thing families object
+ * to most.
  */
 @Singleton
 class LocationRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val fusedLocationClient: FusedLocationProviderClient,
 ) : LocationRepository {
+
+    override fun locationUpdates(intervalMillis: Long): Flow<GeoPoint> = callbackFlow {
+        if (!hasLocationPermission()) {
+            close()
+            return@callbackFlow
+        }
+
+        // HIGH_ACCURACY, not BALANCED.
+        //
+        // BALANCED leans on wifi and cell positioning and typically returns
+        // 50-100 m accuracy. That is unusable here for two compounding reasons:
+        // the smallest safe zone the app allows is 100 m, so a 100 m fix cannot
+        // say which side of the boundary the patient is on; and
+        // SafeZoneEvaluator rejects anything worse than 50 m, so those fixes
+        // were being discarded before they could confirm anything. The status
+        // then sat at UNKNOWN indefinitely and the caregiver's card read
+        // "Location unavailable" for a patient standing still at home.
+        //
+        // The battery cost is paid back by the interval, which is what actually
+        // governs how often the radio wakes.
+        val request = LocationRequest.Builder(
+            Priority.PRIORITY_HIGH_ACCURACY,
+            intervalMillis,
+        )
+            // Never faster than half the requested interval, however many other
+            // apps are asking for fixes. Without this the callback can fire far
+            // more often than intended and the battery cost stops being ours to
+            // reason about.
+            .setMinUpdateIntervalMillis(intervalMillis / 2)
+            // Deliberately NO minimum displacement.
+            //
+            // Filtering out fixes that have not moved looks like a free battery
+            // saving, and it silently breaks the safe zone: a patient sitting
+            // still at home produces one fix and then nothing, so the evaluator
+            // never receives the second confirming fix it needs and the status
+            // stays UNKNOWN forever. The caregiver's card reads "Location
+            // unavailable" for a patient who is simply indoors - which is
+            // exactly what two-device testing showed.
+            //
+            // The interval is the battery control here; a displacement filter
+            // is not a substitute for it, because "no news" and "not moving"
+            // have to stay distinguishable.
+            .setGranularity(Granularity.GRANULARITY_FINE)
+            .setWaitForAccurateLocation(false)
+            .build()
+
+        val callback = object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                val location = result.lastLocation ?: return
+                trySend(
+                    GeoPoint(
+                        latitude = location.latitude,
+                        longitude = location.longitude,
+                        accuracyMetres = if (location.hasAccuracy()) {
+                            location.accuracy
+                        } else {
+                            null
+                        },
+                    ),
+                )
+            }
+        }
+
+        try {
+            fusedLocationClient.requestLocationUpdates(
+                request,
+                callback,
+                Looper.getMainLooper(),
+            )
+        } catch (security: SecurityException) {
+            close(security)
+            return@callbackFlow
+        }
+
+        awaitClose { fusedLocationClient.removeLocationUpdates(callback) }
+    }
 
     override suspend fun currentLocation(): Outcome<GeoPoint> {
         if (!hasLocationPermission()) {

@@ -4,6 +4,7 @@ import com.sahaaya.core.result.AppError
 import com.sahaaya.core.result.Outcome
 import com.sahaaya.domain.model.CaregiverProfile
 import com.sahaaya.domain.model.EmergencyContact
+import com.sahaaya.domain.model.PatientLocation
 import com.sahaaya.domain.model.PatientProfile
 import com.sahaaya.domain.model.User
 import com.sahaaya.domain.repository.ProfileRepository
@@ -57,6 +58,17 @@ class DemoProfileRepository @Inject constructor(
     }
 
     // --- Caregiver ---------------------------------------------------------
+
+    override fun observePatientLocation(patientId: String): Flow<PatientLocation?> =
+        store.patientLocations.map { it[patientId] }
+
+    override suspend fun updatePatientLocation(
+        patientId: String,
+        location: PatientLocation,
+    ): Outcome<Unit> {
+        store.patientLocations.put(patientId, location)
+        return Outcome.Success(Unit)
+    }
 
     override fun observeCaregiverProfile(uid: String): Flow<CaregiverProfile?> =
         store.caregiverProfiles.map { it[uid] }

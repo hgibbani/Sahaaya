@@ -13,6 +13,8 @@ data class PatientProfile(
     val dateOfBirth: String? = null,
     val gender: Gender = Gender.UNSPECIFIED,
     val bloodGroup: String? = null,
+    /** Free text, e.g. "158 cm" - families write it however they know it. */
+    val height: String? = null,
     val address: String? = null,
     val diagnosisStage: DementiaStage = DementiaStage.UNSPECIFIED,
     val diagnosedOn: String? = null,

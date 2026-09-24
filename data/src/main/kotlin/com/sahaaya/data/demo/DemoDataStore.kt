@@ -1,6 +1,7 @@
 package com.sahaaya.data.demo
 
 import com.sahaaya.core.demo.DemoConfig
+import com.sahaaya.domain.model.CareReminder
 import com.sahaaya.domain.model.CaregiverProfile
 import com.sahaaya.domain.model.DementiaStage
 import com.sahaaya.domain.model.DoseStatus
@@ -15,6 +16,7 @@ import com.sahaaya.domain.model.MonitoringSettings
 import com.sahaaya.domain.model.Pairing
 import com.sahaaya.domain.model.PairingCode
 import com.sahaaya.domain.model.PairingStatus
+import com.sahaaya.domain.model.PatientLocation
 import com.sahaaya.domain.model.PatientProfile
 import com.sahaaya.domain.model.Role
 import com.sahaaya.domain.model.User
@@ -54,7 +56,11 @@ class DemoDataStore @Inject constructor() {
     val pairings = MutableStateFlow<Map<String, Pairing>>(emptyMap())
     val pairingCodes = MutableStateFlow<Map<String, PairingCode>>(emptyMap())
 
+    /** patientId to their most recent fix. */
+    val patientLocations = MutableStateFlow<Map<String, PatientLocation>>(emptyMap())
+
     val events = MutableStateFlow<Map<String, HealthEvent>>(emptyMap())
+    val reminders = MutableStateFlow<Map<String, CareReminder>>(emptyMap())
     val medications = MutableStateFlow<Map<String, Medication>>(emptyMap())
     val doses = MutableStateFlow<Map<String, MedicationDose>>(emptyMap())
     val settings = MutableStateFlow<Map<String, MonitoringSettings>>(emptyMap())

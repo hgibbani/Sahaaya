@@ -2,6 +2,7 @@ package com.sahaaya.data.demo
 
 import com.sahaaya.core.result.Outcome
 import com.sahaaya.domain.model.MonitoringSettings
+import com.sahaaya.domain.model.SafeZone
 import com.sahaaya.domain.repository.MessagingRepository
 import com.sahaaya.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
@@ -31,6 +32,24 @@ class DemoSettingsRepository @Inject constructor(
 
     override suspend fun saveSettings(settings: MonitoringSettings): Outcome<Unit> {
         store.settings.put(settings.patientId, settings)
+        return Outcome.Success(Unit)
+    }
+
+    override suspend fun updateSafeZone(
+        patientId: String,
+        zone: SafeZone?,
+        enabled: Boolean,
+    ): Outcome<Unit> {
+        val current = store.settings.value[patientId]
+            ?: MonitoringSettings(patientId = patientId)
+        store.settings.put(
+            patientId,
+            current.copy(
+                safeZone = zone ?: current.safeZone,
+                geofenceEnabled = enabled,
+                updatedAtEpochMillis = System.currentTimeMillis(),
+            ),
+        )
         return Outcome.Success(Unit)
     }
 }

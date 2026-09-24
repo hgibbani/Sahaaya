@@ -1,5 +1,6 @@
 package com.sahaaya.domain.usecase.monitoring
 
+import com.sahaaya.core.demo.FeatureScope
 import com.sahaaya.core.result.AppError
 import com.sahaaya.core.result.Outcome
 import com.sahaaya.domain.model.EventType
@@ -57,7 +58,67 @@ class SaveMonitoringSettingsUseCase @Inject constructor(
         val saved = settingsRepository.saveSettings(clamped)
         if (saved is Outcome.Failure) return saved
 
-        return monitoringController.applySettings(clamped)
+        // The patient's choice is stored exactly as they made it, so nothing is
+        // lost when the feature is switched back on. What is *applied* to the
+        // platform is filtered by FeatureScope, so turning fall detection on
+        // from the settings screen in this build saves the preference without
+        // starting the accelerometer.
+        return monitoringController.applySettings(
+            clamped.copy(
+                fallDetectionEnabled = clamped.fallDetectionEnabled &&
+                    FeatureScope.FALL_DETECTION_ACTIVE,
+                inactivityDetectionEnabled = clamped.inactivityDetectionEnabled &&
+                    FeatureScope.INACTIVITY_DETECTION_ACTIVE,
+                geofenceEnabled = clamped.geofenceEnabled && FeatureScope.GEOFENCE_ACTIVE,
+            ),
+        )
+    }
+}
+
+/**
+ * Starts the monitors the patient's saved settings say should be running.
+ *
+ * Called when the patient dashboard opens. Until this existed the only things
+ * that ever started the detectors were the settings screen and the boot
+ * receiver, which meant a patient who signed in and went to their dashboard was
+ * not actually being monitored - the app said "watching for falls" while the
+ * accelerometer was not registered. That gap is the whole reason this exists.
+ *
+ * Idempotent: applying the same settings twice starts nothing twice, because
+ * [MonitoringController] starts a service that is already running as a no-op.
+ *
+ * Failures are deliberately swallowed by the caller. A missing permission
+ * should degrade monitoring, not block the dashboard from loading.
+ */
+class EnsureMonitoringRunningUseCase @Inject constructor(
+    private val authRepository: AuthRepository,
+    private val settingsRepository: SettingsRepository,
+    private val monitoringController: MonitoringController,
+) {
+    suspend operator fun invoke(): Outcome<Unit> {
+        val patientId = authRepository.currentUserId()
+            ?: return Outcome.Failure(AppError.NotAuthenticated())
+
+        val settings = when (val result = settingsRepository.getSettings(patientId)) {
+            is Outcome.Failure -> return result
+            is Outcome.Success -> result.data
+        }
+
+        // Detectors this build does not run are forced off before anything is
+        // applied, so a stored `true` from an earlier install - or from a build
+        // where the flag was on - cannot start the accelerometer behind the
+        // patient's back. See FeatureScope.
+        val scoped = settings.copy(
+            fallDetectionEnabled = settings.fallDetectionEnabled &&
+                FeatureScope.FALL_DETECTION_ACTIVE,
+            inactivityDetectionEnabled = settings.inactivityDetectionEnabled &&
+                FeatureScope.INACTIVITY_DETECTION_ACTIVE,
+            geofenceEnabled = settings.geofenceEnabled && FeatureScope.GEOFENCE_ACTIVE,
+        )
+
+        if (!scoped.isMonitoringAnything) return Outcome.Success(Unit)
+
+        return monitoringController.applySettings(scoped)
     }
 }
 

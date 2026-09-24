@@ -3,6 +3,9 @@ package com.sahaaya.sensor.demo
 import com.sahaaya.core.result.Outcome
 import com.sahaaya.domain.model.GeoPoint
 import com.sahaaya.domain.repository.LocationRepository
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,9 +24,17 @@ import javax.inject.Singleton
 @Singleton
 class DemoLocationRepository @Inject constructor() : LocationRepository {
 
-    override suspend fun currentLocation(): Outcome<GeoPoint> = Outcome.Success(
-        GeoPoint(latitude = 9.9312, longitude = 76.2673, accuracyMetres = 12f),
-    )
+    private val fixed = GeoPoint(latitude = 9.9312, longitude = 76.2673, accuracyMetres = 12f)
+
+    override suspend fun currentLocation(): Outcome<GeoPoint> = Outcome.Success(fixed)
+
+    /** Re-emits the same point on the requested cadence; the patient never moves. */
+    override fun locationUpdates(intervalMillis: Long): Flow<GeoPoint> = flow {
+        while (true) {
+            emit(fixed)
+            delay(intervalMillis)
+        }
+    }
 
     override fun hasLocationPermission(): Boolean = true
 

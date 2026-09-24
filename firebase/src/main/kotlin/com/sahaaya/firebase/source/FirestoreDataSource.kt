@@ -177,7 +177,11 @@ class FirestoreDataSource @Inject constructor(
         code: String,
         caregiverId: String,
         caregiverName: String,
-        buildPairing: (patientId: String, patientName: String) -> Pair<String, Map<String, Any?>>,
+        buildPairing: (
+            patientId: String,
+            patientName: String,
+            patientPhone: String,
+        ) -> Pair<String, Map<String, Any?>>,
         onInvalidCode: () -> Throwable,
         onAlreadyPaired: () -> Throwable,
     ): Outcome<Map<String, Any?>> = firebaseCall {
@@ -197,8 +201,9 @@ class FirestoreDataSource @Inject constructor(
             val patientId = codeSnapshot.getString(PairingCodeFields.PATIENT_ID)
                 ?: throw onInvalidCode()
             val patientName = codeSnapshot.getString(PairingCodeFields.PATIENT_NAME).orEmpty()
+            val patientPhone = codeSnapshot.getString(PairingCodeFields.PATIENT_PHONE).orEmpty()
 
-            val (pairingId, pairingData) = buildPairing(patientId, patientName)
+            val (pairingId, pairingData) = buildPairing(patientId, patientName, patientPhone)
             val pairingRef = firestore
                 .collection(FirestoreCollections.PAIRINGS)
                 .document(pairingId)

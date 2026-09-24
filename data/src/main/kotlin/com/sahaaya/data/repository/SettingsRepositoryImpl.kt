@@ -3,6 +3,8 @@ package com.sahaaya.data.repository
 import com.sahaaya.core.result.Outcome
 import com.sahaaya.data.mapper.toMap
 import com.sahaaya.data.mapper.toMonitoringSettings
+import com.sahaaya.domain.model.SafeZone
+import com.sahaaya.firebase.SettingsFields
 import com.sahaaya.domain.model.MonitoringSettings
 import com.sahaaya.domain.repository.SettingsRepository
 import com.sahaaya.firebase.source.EventDataSource
@@ -45,4 +47,23 @@ class SettingsRepositoryImpl @Inject constructor(
             patientId = settings.patientId,
             data = settings.toMap(),
         )
+
+    override suspend fun updateSafeZone(
+        patientId: String,
+        zone: SafeZone?,
+        enabled: Boolean,
+    ): Outcome<Unit> = eventDataSource.writeSettings(
+        patientId = patientId,
+        data = buildMap {
+            put(SettingsFields.PATIENT_ID, patientId)
+            put(SettingsFields.GEOFENCE_ENABLED, enabled)
+            put(SettingsFields.UPDATED_AT, System.currentTimeMillis())
+            zone?.let {
+                put(SettingsFields.SAFE_ZONE_LAT, it.centre.latitude)
+                put(SettingsFields.SAFE_ZONE_LON, it.centre.longitude)
+                put(SettingsFields.SAFE_ZONE_RADIUS, it.radiusMetres.toLong())
+                put(SettingsFields.SAFE_ZONE_LABEL, it.label)
+            }
+        },
+    )
 }
